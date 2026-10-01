@@ -1,0 +1,8 @@
+{
+  "name": "CampusPass - School Event Registration System",
+  "description": "Register for school events, track your tickets, and manage attendees.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

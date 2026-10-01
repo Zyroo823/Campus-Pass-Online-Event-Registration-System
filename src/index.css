@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #F3EEE3;
+  --color-paper-light: #FAF7F0;
+  --color-paper-dark: #E7DFD1;
+  --color-paper-contrast: #DDD2BF;
+  --color-ink: #17150F;
+  --color-ink-light: #2C2820;
+  --color-ink-muted: #38342B;
+  --color-ink-faint: #524C40;
+  --color-vermilion: #D9441F;
+  --color-vermilion-hover: #BF3613;
+  --color-vermilion-faint: #FBECE8;
+  --color-olive: #5B6B3A;
+  --color-olive-hover: #4A582E;
+  --color-olive-faint: #F0F3EA;
+  --color-mustard: #C99A1B;
+  --color-mustard-hover: #AD8212;
+  --color-mustard-faint: #FBF5E5;
+
+  --font-display: "Bricolage Grotesque", serif, sans-serif;
+  --font-body: "IBM Plex Sans", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  --shadow-hard: 3px 3px 0px #17150F;
+  --shadow-hard-sm: 2px 2px 0px #17150F;
+  --shadow-hard-lg: 5px 5px 0px #17150F;
+}
+
+/* Base custom styles meeting NFR-009 Accessibility & Visual Constitution */
+:root {
+  color-scheme: light;
+}
+
+body {
+  font-family: var(--font-body), "IBM Plex Sans", sans-serif;
+  background-color: #F3EEE3;
+  color: #17150F;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0;
+}
+
+/* NFR-009: Minimum 12px for mono labels and 14px for body text */
+.font-mono {
+  font-size: max(12px, 0.75rem);
+}
+
+.font-body {
+  font-size: max(14px, 0.875rem);
+}
+
+/* Explicit high-visibility placeholder styling meeting WCAG AA (4.5:1) */
+input::placeholder,
+textarea::placeholder {
+  color: #524C40 !important;
+  opacity: 1 !important;
+  font-family: var(--font-mono), monospace !important;
+}
+
+input::-webkit-input-placeholder,
+textarea::-webkit-input-placeholder {
+  color: #524C40 !important;
+  opacity: 1 !important;
+}
+
+input:-moz-placeholder,
+textarea:-moz-placeholder {
+  color: #524C40 !important;
+  opacity: 1 !important;
+}
+
+input::-moz-placeholder,
+textarea::-moz-placeholder {
+  color: #524C40 !important;
+  opacity: 1 !important;
+}
+
+input:-ms-input-placeholder,
+textarea:-ms-input-placeholder {
+  color: #524C40 !important;
+  opacity: 1 !important;
+}
+
+/* Visible focus rings for WCAG 2.1 AA */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #D9441F;
+  outline-offset: 2px;
+}
+
+/* Ticket dashed perforation line */
+.perforation-v {
+  border-left: 2px dashed #17150F;
+}
+
+.perforation-h {
+  border-top: 2px dashed #17150F;
+}
+
+/* Rubber stamp CSS animation (NFR-009: ~300ms, disabled under reduced motion) */
+@keyframes stampIn {
+  0% {
+    opacity: 0;
+    transform: scale(2.4) rotate(-14deg);
+  }
+  70% {
+    opacity: 0.9;
+    transform: scale(0.92) rotate(-9deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-10deg);
+  }
+}
+
+.animate-stamp {
+  animation: stampIn 300ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-stamp {
+    animation: none !important;
+    transform: rotate(-10deg) !important;
+    opacity: 1 !important;
+  }
+}
