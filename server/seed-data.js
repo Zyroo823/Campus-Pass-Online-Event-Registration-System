@@ -49,7 +49,7 @@ export async function generateSeedUsers() {
     {
       username: 'admin01',
       email: 'admin01@uc.edu.ph',
-      full_name: 'Engr. Danilo B. Cabahug (Dean of Student Affairs)',
+      full_name: 'Clent Kurt Alforo',
       school_id: 'ADM-2024-001',
       password_hash,
       role: 'admin',
@@ -59,7 +59,7 @@ export async function generateSeedUsers() {
     {
       username: 'organizer01',
       email: 'organizer01@uc.edu.ph',
-      full_name: 'Prof. Maria Theresa Gomez (College of Computer Studies)',
+      full_name: 'John Kurt Senerpida',
       school_id: 'FAC-2024-101',
       password_hash,
       role: 'organizer',
@@ -69,7 +69,7 @@ export async function generateSeedUsers() {
     {
       username: 'student01',
       email: 'student01@uc.edu.ph',
-      full_name: 'Amara D. Mendoza',
+      full_name: 'John Kurt Alforo',
       school_id: '26-10201-M',
       password_hash,
       role: 'participant',
@@ -78,7 +78,7 @@ export async function generateSeedUsers() {
     {
       username: 'student02',
       email: 'student02@uc.edu.ph',
-      full_name: 'Liam Kyle Fernandez',
+      full_name: 'Liel Joseph C. Ceniza',
       school_id: '26-10202-M',
       password_hash,
       role: 'participant',
@@ -87,7 +87,7 @@ export async function generateSeedUsers() {
     {
       username: 'student03',
       email: 'student03@uc.edu.ph',
-      full_name: 'Sofia Isabelle Tan',
+      full_name: 'John Mar Z. Aledon',
       school_id: '26-10203-M',
       password_hash,
       role: 'participant',
@@ -96,7 +96,7 @@ export async function generateSeedUsers() {
     {
       username: 'student04',
       email: 'student04@uc.edu.ph',
-      full_name: 'Kenji Paolo Yap',
+      full_name: 'Clent John B. Senerpida',
       school_id: '26-10204-M',
       password_hash,
       role: 'participant',

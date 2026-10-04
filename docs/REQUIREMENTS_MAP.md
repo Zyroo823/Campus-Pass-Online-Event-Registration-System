@@ -49,12 +49,12 @@ Shared Password for all seeded accounts: `Test@1234`
 
 | Username | Role | Full Name | School ID | Email | Status |
 |---|---|---|---|---|---|
-| `admin01` | `admin` | Engr. Danilo B. Cabahug (Dean of Student Affairs) | `ADM-2024-001` | `admin01@uc.edu.ph` | Active |
-| `organizer01` | `organizer` | Prof. Maria Theresa Gomez (College of Computer Studies) | `FAC-2024-101` | `organizer01@uc.edu.ph` | Active |
-| `student01` | `participant` | Amara D. Mendoza | `26-10201-M` | `student01@uc.edu.ph` | Active |
-| `student02` | `participant` | Liam Kyle Fernandez | `26-10202-M` | `student02@uc.edu.ph` | Active |
-| `student03` | `participant` | Sofia Isabelle Tan | `26-10203-M` | `student03@uc.edu.ph` | Active |
-| `student04` | `participant` | Kenji Paolo Yap | `26-10204-M` | `student04@uc.edu.ph` | Active |
+| `admin01` | `admin` | Clent Kurt Alforo | `ADM-2024-001` | `admin01@uc.edu.ph` | Active |
+| `organizer01` | `organizer` | John Kurt Senerpida | `FAC-2024-101` | `organizer01@uc.edu.ph` | Active |
+| `student01` | `participant` | John Kurt Alforo | `26-10201-M` | `student01@uc.edu.ph` | Active |
+| `student02` | `participant` | Liel Joseph C. Ceniza | `26-10202-M` | `student02@uc.edu.ph` | Active |
+| `student03` | `participant` | John Mar Z. Aledon | `26-10203-M` | `student03@uc.edu.ph` | Active |
+| `student04` | `participant` | Clent John B. Senerpida | `26-10204-M` | `student04@uc.edu.ph` | Active |
 
 ---
 

@@ -152,12 +152,12 @@ All accounts share the documented password: **`Test@1234`**
 
 | Username | Role | Full Legal Name | School ID | Email | Notes |
 |---|---|---|---|---|---|
-| `admin01` | Admin | Engr. Danilo B. Cabahug (Dean) | `ADM-2024-001` | `admin01@uc.edu.ph` | Can promote roles and deactivate users |
-| `organizer01` | Organizer | Prof. Maria Theresa Gomez (CCS) | `FAC-2024-101` | `organizer01@uc.edu.ph` | Primary faculty event host and organizer |
-| `student01` | Participant | Amara D. Mendoza | `26-10201-M` | `student01@uc.edu.ph` | Has active passes and pending applications |
-| `student02` | Participant | Liam Kyle Fernandez | `26-10202-M` | `student02@uc.edu.ph` | Has pending application for Event 3 |
-| `student03` | Participant | Sofia Isabelle Tan | `26-10203-M` | `student03@uc.edu.ph` | Has cancelled pass and approved passes |
-| `student04` | Participant | Kenji Paolo Yap | `26-10204-M` | `student04@uc.edu.ph` | Has declined registration application |
+| `admin01` | Admin | Clent Kurt Alforo | `ADM-2024-001` | `admin01@uc.edu.ph` | Can promote roles and deactivate users |
+| `organizer01` | Organizer | John Kurt Senerpida | `FAC-2024-101` | `organizer01@uc.edu.ph` | Primary faculty event host and organizer |
+| `student01` | Participant | John Kurt Alforo | `26-10201-M` | `student01@uc.edu.ph` | Has active passes and pending applications |
+| `student02` | Participant | Liel Joseph C. Ceniza | `26-10202-M` | `student02@uc.edu.ph` | Has pending application for Event 3 |
+| `student03` | Participant | John Mar Z. Aledon | `26-10203-M` | `student03@uc.edu.ph` | Has cancelled pass and approved passes |
+| `student04` | Participant | Clent John B. Senerpida | `26-10204-M` | `student04@uc.edu.ph` | Has declined registration application |
 
 ---
 
