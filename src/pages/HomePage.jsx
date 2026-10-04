@@ -4,32 +4,37 @@
  * FR-004: Paginated list of upcoming events
  * FR-005: Search events by keyword and filter by category, date range, seat availability
  * FR-007: Quick registration
+ * Requirement 3: If very first load request cannot reach API, show full-page api-down-page
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { api, ClientApiError } from '../api.js';
+import { api, ClientApiError, triggerSystemDown } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { EventTicketCard } from '../components/events/EventTicketCard.jsx';
 import { EventFilters } from '../components/events/EventFilters.jsx';
 import { SkeletonTicket } from '../components/common/SkeletonTicket.jsx';
 import { RegistrationSuccessModal } from '../components/common/RegistrationSuccessModal.jsx';
+import { SystemDownPage } from './SystemDownPage.jsx';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export const HomePage = () => {
   const [events, setEvents] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 12, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
+  const [isApiDown, setIsApiDown] = useState(false);
   const [userRegisteredEventIds, setUserRegisteredEventIds] = useState([]);
   const [recentRegistration, setRecentRegistration] = useState(null);
 
+  const initialLoadRef = useRef(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
   const fetchEvents = useCallback(async () => {
+    const isFirstLoad = initialLoadRef.current;
     setLoading(true);
     try {
       const params = {};
@@ -40,6 +45,8 @@ export const HomePage = () => {
       const res = await api.get('/api/events', params);
       setEvents(res.events || []);
       setPagination(res.pagination || { page: 1, limit: 12, total: 0, totalPages: 1 });
+      initialLoadRef.current = false;
+      setIsApiDown(false);
 
       if (user) {
         try {
@@ -53,7 +60,19 @@ export const HomePage = () => {
         }
       }
     } catch (err) {
-      showToast(err.message || 'Failed to load events calendar.', 'error');
+      const isUnreachable =
+        err?.isServerUnreachable ||
+        (err?.status >= 500 && err?.status <= 599) ||
+        err?.status === 404 ||
+        err?.status === 0 ||
+        err?.code === 'NETWORK_ERROR';
+
+      if (isFirstLoad && isUnreachable) {
+        setIsApiDown(true);
+        triggerSystemDown(true);
+      } else {
+        showToast(err.message || 'Failed to load events calendar.', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -62,6 +81,17 @@ export const HomePage = () => {
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
+
+  if (isApiDown) {
+    return (
+      <SystemDownPage
+        onRetry={() => {
+          setIsApiDown(false);
+          fetchEvents();
+        }}
+      />
+    );
+  }
 
   const handlePageChange = (newPage) => {
     const next = new URLSearchParams(searchParams);

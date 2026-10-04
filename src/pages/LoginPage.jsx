@@ -19,6 +19,7 @@ export const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [isApiError, setIsApiError] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [rateLimitSeconds, setRateLimitSeconds] = useState(null);
   const [demoMode, setDemoMode] = useState(() => {
@@ -66,6 +67,7 @@ export const LoginPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage(null);
+    setIsApiError(false);
     setFieldErrors({});
 
     const errors = {};
@@ -95,15 +97,32 @@ export const LoginPage = () => {
       }
     } catch (err) {
       if (err instanceof ClientApiError) {
-        if (err.status === 429 && err.retryAfterSeconds) {
-          setRateLimitSeconds(err.retryAfterSeconds);
+        if (err.status === 429) {
+          const seconds = err.retryAfterSeconds || 60;
+          setRateLimitSeconds(seconds);
           setErrorMessage(null);
+        } else if (err.status === 401) {
+          setErrorMessage('Invalid username or password.');
+          if (err.fields) setFieldErrors(err.fields);
+        } else if (err.status === 422) {
+          setErrorMessage(err.message || 'The submitted form contains invalid or missing data.');
+          if (err.fields) setFieldErrors(err.fields);
+        } else if (
+          err.isServerUnreachable ||
+          err.status >= 500 ||
+          err.status === 404 ||
+          err.status === 0 ||
+          err.code === 'NETWORK_ERROR'
+        ) {
+          setIsApiError(true);
+          setErrorMessage("The server can't be reached. Please try again later.");
         } else {
           setErrorMessage(err.message);
+          if (err.fields) setFieldErrors(err.fields);
         }
-        if (err.fields) setFieldErrors(err.fields);
       } else {
-        setErrorMessage('Authentication failed. Please verify credentials.');
+        setIsApiError(true);
+        setErrorMessage("The server can't be reached. Please try again later.");
       }
     } finally {
       setLoading(false);
@@ -137,6 +156,18 @@ export const LoginPage = () => {
               Too many failed attempts. Try again in {minutes} min {seconds} s.
             </p>
           </div>
+        ) : isApiError ? (
+          <div
+            role="alert"
+            data-testid="api-error-notice"
+            className="p-3 border-2 border-vermilion bg-vermilion-faint text-ink font-mono text-xs flex items-start gap-2 mb-4"
+          >
+            <AlertCircle className="w-4 h-4 text-vermilion shrink-0 mt-0.5" />
+            <div data-testid="login-error-summary">
+              <p className="font-bold text-ink">Sign-in Notice</p>
+              <p className="mt-0.5">{errorMessage}</p>
+            </div>
+          </div>
         ) : errorMessage ? (
           <div
             role="alert"
@@ -167,7 +198,13 @@ export const LoginPage = () => {
                 autoComplete="username"
                 placeholder="Enter your username (e.g. student01, organizer01, admin01)"
                 value={username}
-                onChange={e => setUsername(e.target.value)}
+                onChange={e => {
+                  setUsername(e.target.value);
+                  if (errorMessage) {
+                    setErrorMessage(null);
+                    setIsApiError(false);
+                  }
+                }}
                 aria-invalid={Boolean(fieldErrors.username)}
                 aria-describedby={fieldErrors.username ? 'error-username' : undefined}
                 className="w-full pl-9 pr-3 py-2 border-2 border-ink bg-paper-light text-sm font-mono text-ink placeholder:text-[#524C40] focus:bg-paper"
@@ -200,7 +237,13 @@ export const LoginPage = () => {
                 autoComplete="current-password"
                 placeholder="Enter your password (e.g. Test@1234)"
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={e => {
+                  setPassword(e.target.value);
+                  if (errorMessage) {
+                    setErrorMessage(null);
+                    setIsApiError(false);
+                  }
+                }}
                 aria-invalid={Boolean(fieldErrors.password)}
                 aria-describedby={fieldErrors.password ? 'error-password' : undefined}
                 className="w-full pl-9 pr-10 py-2 border-2 border-ink bg-paper-light text-sm font-mono text-ink placeholder:text-[#524C40] focus:bg-paper"
@@ -263,6 +306,7 @@ export const LoginPage = () => {
                 setUsername('admin01');
                 setPassword('Test@1234');
                 setErrorMessage(null);
+                setIsApiError(false);
                 setFieldErrors({});
               }}
               data-testid="quick-fill-admin"
@@ -276,6 +320,7 @@ export const LoginPage = () => {
                 setUsername('organizer01');
                 setPassword('Test@1234');
                 setErrorMessage(null);
+                setIsApiError(false);
                 setFieldErrors({});
               }}
               data-testid="quick-fill-organizer"
@@ -289,6 +334,7 @@ export const LoginPage = () => {
                 setUsername('student01');
                 setPassword('Test@1234');
                 setErrorMessage(null);
+                setIsApiError(false);
                 setFieldErrors({});
               }}
               data-testid="quick-fill-student"

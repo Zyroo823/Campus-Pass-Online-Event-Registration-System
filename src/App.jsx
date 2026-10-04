@@ -2,13 +2,15 @@
  * CampusPass Main App Entry
  * Plain JavaScript
  * NFR-002, NFR-005, NFR-006, NFR-007, NFR-009
+ * Requirement 4: React Error Boundary around the app with data-testid="app-error-page"
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
 import { registerSystemDownListener } from './api.js';
+import { ErrorBoundary } from './components/common/ErrorBoundary.jsx';
 
 import { Header } from './components/common/Header.jsx';
 import { Footer } from './components/common/Footer.jsx';
@@ -65,15 +67,19 @@ const RoleRoute = ({ allowedRoles, children }) => {
   return children;
 };
 
-export default function App() {
+function AppContent() {
   const [isSystemDown, setIsSystemDown] = useState(false);
 
   useEffect(() => {
     registerSystemDownListener(down => setIsSystemDown(down));
   }, []);
 
+  const handleRetry = useCallback(() => {
+    setIsSystemDown(false);
+  }, []);
+
   if (isSystemDown) {
-    return <SystemDownPage onRetry={() => setIsSystemDown(false)} />;
+    return <SystemDownPage onRetry={handleRetry} />;
   }
 
   return (
@@ -147,5 +153,13 @@ export default function App() {
         </AuthProvider>
       </ToastProvider>
     </BrowserRouter>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
   );
 }

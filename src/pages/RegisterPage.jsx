@@ -26,6 +26,7 @@ export const RegisterPage = () => {
 
   const [fieldErrors, setFieldErrors] = useState({});
   const [errorMessage, setErrorMessage] = useState(null);
+  const [isApiError, setIsApiError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [rateLimitSeconds, setRateLimitSeconds] = useState(null);
 
@@ -36,6 +37,10 @@ export const RegisterPage = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    if (errorMessage) {
+      setErrorMessage(null);
+      setIsApiError(false);
+    }
     if (fieldErrors[name]) {
       setFieldErrors(prev => {
         const next = { ...prev };
@@ -94,6 +99,7 @@ export const RegisterPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage(null);
+    setIsApiError(false);
 
     if (!validateClient()) {
       setErrorMessage('Please correct the validation errors in the form below.');
@@ -116,15 +122,38 @@ export const RegisterPage = () => {
       navigate('/dashboard');
     } catch (err) {
       if (err instanceof ClientApiError) {
-        if (err.status === 429 && err.retryAfterSeconds) {
-          setRateLimitSeconds(err.retryAfterSeconds);
-        }
-        setErrorMessage(err.message);
-        if (err.fields) {
-          setFieldErrors(err.fields);
+        if (err.status === 429) {
+          const seconds = err.retryAfterSeconds || 60;
+          setRateLimitSeconds(seconds);
+          setErrorMessage(null);
+        } else if (err.status === 422) {
+          setErrorMessage(err.message || 'The submitted form contains invalid or missing data.');
+          if (err.fields) {
+            setFieldErrors(err.fields);
+          }
+        } else if (err.status === 409) {
+          setErrorMessage(err.message || 'One or more credentials are already registered.');
+          if (err.fields) {
+            setFieldErrors(err.fields);
+          }
+        } else if (
+          err.isServerUnreachable ||
+          err.status >= 500 ||
+          err.status === 404 ||
+          err.status === 0 ||
+          err.code === 'NETWORK_ERROR'
+        ) {
+          setIsApiError(true);
+          setErrorMessage("The server can't be reached. Please try again later.");
+        } else {
+          setErrorMessage(err.message);
+          if (err.fields) {
+            setFieldErrors(err.fields);
+          }
         }
       } else {
-        setErrorMessage('Unable to register account. Please check your inputs.');
+        setIsApiError(true);
+        setErrorMessage("The server can't be reached. Please try again later.");
       }
     } finally {
       setLoading(false);
@@ -146,7 +175,29 @@ export const RegisterPage = () => {
           </p>
         </div>
 
-        {errorMessage && (
+        {rateLimitSeconds && (
+          <div className="mb-4">
+            <RateLimitCountdown
+              initialSeconds={rateLimitSeconds}
+              message="Too many registration attempts."
+              onExpire={() => setRateLimitSeconds(null)}
+            />
+          </div>
+        )}
+
+        {isApiError ? (
+          <div
+            role="alert"
+            data-testid="api-error-notice"
+            className="p-3 border-2 border-vermilion bg-vermilion-faint text-ink font-mono text-xs flex items-start gap-2 mb-5"
+          >
+            <AlertCircle className="w-4 h-4 text-vermilion shrink-0 mt-0.5" />
+            <div data-testid="register-error-summary">
+              <p className="font-bold text-ink">Notice</p>
+              <p className="mt-0.5">{errorMessage}</p>
+            </div>
+          </div>
+        ) : errorMessage ? (
           <div
             role="alert"
             data-testid="register-error-summary"
@@ -158,17 +209,7 @@ export const RegisterPage = () => {
               <p className="mt-0.5">{errorMessage}</p>
             </div>
           </div>
-        )}
-
-        {rateLimitSeconds && (
-          <div className="mb-4">
-            <RateLimitCountdown
-              initialSeconds={rateLimitSeconds}
-              message="Too many registration attempts."
-              onExpire={() => setRateLimitSeconds(null)}
-            />
-          </div>
-        )}
+        ) : null}
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <div>

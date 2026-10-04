@@ -219,6 +219,7 @@ export const userQuerySchema = z.object({
   keyword: z.string().trim().max(100).optional(),
   role: z.enum(['participant', 'organizer', 'admin']).optional(),
   is_active: z.enum(['1', '0', 'true', 'false']).optional(),
+  order: z.enum(['asc', 'desc', 'ASC', 'DESC']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(12),
 });

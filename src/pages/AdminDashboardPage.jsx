@@ -46,6 +46,7 @@ export const AdminDashboardPage = () => {
       const res = await api.get('/api/users', {
         page,
         limit: 12,
+        order: 'asc',
         keyword: keyword.trim() || undefined,
         role: roleFilter || undefined,
         is_active: statusFilter || undefined,

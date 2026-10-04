@@ -2,11 +2,12 @@
  * Authentication Context
  * Plain JavaScript
  * FR-001, FR-002, FR-003, NFR-002
+ * Requirement 3: First load GET /api/auth/me unreachable triggers api-down-page
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, registerUnauthorizedListener, setAuthToken } from '../api.js';
+import { api, registerUnauthorizedListener, setAuthToken, triggerSystemDown } from '../api.js';
 import { useToast } from './ToastContext.jsx';
 
 const AuthContext = createContext(null);
@@ -23,6 +24,7 @@ export const AuthProvider = ({ children }) => {
   userRef.current = user;
 
   const isHandling401Ref = useRef(false);
+  const initialLoadRef = useRef(true);
 
   const refreshUnreadCount = useCallback(async () => {
     try {
@@ -35,13 +37,29 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const refreshUser = useCallback(async () => {
+    const isFirstLoad = initialLoadRef.current;
     try {
       // Single source of truth: verify against server session
       const res = await api.get('/api/auth/me');
       setUser(res.user);
+      initialLoadRef.current = false;
       await refreshUnreadCount();
-    } catch {
-      setUser(null);
+    } catch (err) {
+      const isUnreachable =
+        err?.isServerUnreachable ||
+        (err?.status >= 500 && err?.status <= 599) ||
+        err?.status === 404 ||
+        err?.status === 0 ||
+        err?.code === 'NETWORK_ERROR';
+
+      if (isFirstLoad && isUnreachable) {
+        triggerSystemDown(true);
+      } else {
+        setUser(null);
+        if (err?.status === 401) {
+          initialLoadRef.current = false;
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -73,6 +91,7 @@ export const AuthProvider = ({ children }) => {
       setAuthToken(res.token);
     }
     setUser(res.user);
+    initialLoadRef.current = false;
     await refreshUnreadCount();
     return res.user;
   };
@@ -83,6 +102,7 @@ export const AuthProvider = ({ children }) => {
       setAuthToken(res.token);
     }
     setUser(res.user);
+    initialLoadRef.current = false;
     await refreshUnreadCount();
     return res.user;
   };

@@ -1,13 +1,18 @@
 /**
  * System Down / Outage Page
  * NFR-005 Availability: The UI shows a clear page when the API or DB is down.
+ * Requirement 3: Full-page message with Retry button, data-testid="api-down-page"
  */
 
 import React, { useState } from 'react';
 import { AlertOctagon, RefreshCw } from 'lucide-react';
 import { api } from '../api.js';
 
-export const SystemDownPage = ({ onRetry }) => {
+export const SystemDownPage = ({
+  title = 'Campus Service Offline',
+  message = "The server can't be reached. Please try again later.",
+  onRetry,
+}) => {
   const [checking, setChecking] = useState(false);
   const [statusDetails, setStatusDetails] = useState(null);
 
@@ -15,15 +20,22 @@ export const SystemDownPage = ({ onRetry }) => {
     setChecking(true);
     setStatusDetails(null);
     try {
-      const res = await api.get('/api/health');
-      if (res.status === 'healthy') {
-        if (onRetry) onRetry();
-        window.location.reload();
+      if (onRetry) {
+        await onRetry();
       } else {
-        setStatusDetails('Database service remains offline. Awaiting recovery.');
+        const res = await api.get('/api/health');
+        if (res.status === 'healthy') {
+          try {
+            window.location.reload();
+          } catch {
+            // In jsdom or test environment
+          }
+        } else {
+          setStatusDetails('Database service remains offline. Awaiting recovery.');
+        }
       }
     } catch {
-      setStatusDetails('Campus API gateway is unreachable. Please verify server connection.');
+      setStatusDetails("The server can't be reached. Please try again later.");
     } finally {
       setChecking(false);
     }
@@ -32,10 +44,13 @@ export const SystemDownPage = ({ onRetry }) => {
   return (
     <main
       role="main"
-      data-testid="system-down-page"
+      data-testid="api-down-page"
       className="min-h-screen bg-paper flex items-center justify-center p-6 text-ink"
     >
-      <div className="w-full max-w-lg bg-paper border-4 border-vermilion shadow-hard-lg p-8 text-center space-y-6">
+      <div
+        data-testid="system-down-page"
+        className="w-full max-w-lg bg-paper border-4 border-vermilion shadow-hard-lg p-8 text-center space-y-6"
+      >
         <AlertOctagon className="w-16 h-16 text-vermilion mx-auto animate-bounce" />
 
         <div className="space-y-2 border-b-2 border-ink pb-4">
@@ -43,10 +58,10 @@ export const SystemDownPage = ({ onRetry }) => {
             Critical System Outage Notice (NFR-005)
           </span>
           <h1 className="font-display font-black text-3xl text-ink">
-            Campus Database Offline
+            {title}
           </h1>
           <p className="font-body text-sm text-ink-muted">
-            The CampusPass application server is unable to establish an active connection with the database backend (MySQL 8 / MariaDB).
+            {message}
           </p>
         </div>
 
@@ -68,6 +83,7 @@ export const SystemDownPage = ({ onRetry }) => {
         <div className="pt-2 flex justify-center">
           <button
             type="button"
+            data-testid="retry-button"
             onClick={handleCheckAgain}
             disabled={checking}
             className="inline-flex items-center gap-2 px-5 py-2.5 border-2 border-ink bg-vermilion text-paper font-mono text-xs font-bold uppercase tracking-wider shadow-hard hover:bg-vermilion-hover transition-colors disabled:opacity-50 cursor-pointer"

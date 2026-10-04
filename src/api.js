@@ -5,14 +5,17 @@
  * NFR-005: System availability tracking
  */
 
+export const SERVER_UNREACHABLE_MESSAGE = "The server can't be reached. Please try again later.";
+
 export class ClientApiError extends Error {
-  constructor(status, errorData) {
+  constructor(status, errorData = {}) {
     super(errorData.message);
     this.name = 'ClientApiError';
     this.status = status;
     this.code = errorData.code || 'UNKNOWN_ERROR';
     this.fields = errorData.fields;
     this.retryAfterSeconds = errorData.retryAfterSeconds;
+    this.isServerUnreachable = Boolean(errorData.isServerUnreachable);
   }
 }
 
@@ -43,6 +46,12 @@ export function registerSystemDownListener(cb) {
   isSystemDownCallback = cb;
 }
 
+export function triggerSystemDown(down = true) {
+  if (isSystemDownCallback) {
+    isSystemDownCallback(down);
+  }
+}
+
 export function registerUnauthorizedListener(cb) {
   onUnauthorizedCallback = cb;
 }
@@ -67,10 +76,6 @@ export async function apiRequest(endpoint, options = {}) {
       credentials: 'include', // Guaranteed on all requests
     });
 
-    if (response.status === 503) {
-      if (isSystemDownCallback) isSystemDownCallback(true);
-    }
-
     if (response.status === 401) {
       if (onUnauthorizedCallback) {
         onUnauthorizedCallback();
@@ -78,28 +83,42 @@ export async function apiRequest(endpoint, options = {}) {
     }
 
     if (!response.ok) {
-      let errorJson = {};
+      let errorJson = null;
       try {
         errorJson = await response.json();
       } catch {
-        errorJson = {
-          error: {
-            code: `HTTP_${response.status}`,
-            message: `Request failed with HTTP status ${response.status}.`,
-          },
-        };
+        errorJson = null;
+      }
+
+      const isApiRoute = url.startsWith('/api') || url.includes('/api');
+      const is5xx = response.status >= 500 && response.status <= 599;
+      const isBusiness404 =
+        response.status === 404 &&
+        (errorJson?.error?.code === 'EVENT_NOT_FOUND' || errorJson?.error?.code === 'USER_NOT_FOUND');
+      const is404OnApi = response.status === 404 && isApiRoute && !isBusiness404;
+      const isServerUnreachable = is5xx || is404OnApi;
+
+      let code = errorJson?.error?.code;
+      let message = errorJson?.error?.message;
+
+      if (isServerUnreachable) {
+        code = code || (is5xx ? `HTTP_${response.status}` : 'API_NOT_FOUND');
+        message = SERVER_UNREACHABLE_MESSAGE;
+      } else if (!message || (typeof message === 'string' && message.includes('Request failed with HTTP status'))) {
+        message = SERVER_UNREACHABLE_MESSAGE;
       }
 
       const retryHeader = response.headers.get('Retry-After');
       const retryAfterSeconds = retryHeader
         ? parseInt(retryHeader, 10)
-        : errorJson.error?.retryAfterSeconds;
+        : errorJson?.error?.retryAfterSeconds;
 
       throw new ClientApiError(response.status, {
-        code: errorJson.error?.code || 'REQUEST_FAILED',
-        message: errorJson.error?.message || 'An error occurred while communicating with the server.',
-        fields: errorJson.error?.fields,
+        code: code || `HTTP_${response.status}`,
+        message,
+        fields: errorJson?.error?.fields,
         retryAfterSeconds,
+        isServerUnreachable,
       });
     }
 
@@ -113,10 +132,10 @@ export async function apiRequest(endpoint, options = {}) {
       throw err;
     }
 
-    if (isSystemDownCallback) isSystemDownCallback(true);
-    throw new ClientApiError(503, {
+    throw new ClientApiError(0, {
       code: 'NETWORK_ERROR',
-      message: 'Unable to reach the campus server. Please check your network connection.',
+      message: SERVER_UNREACHABLE_MESSAGE,
+      isServerUnreachable: true,
     });
   }
 }

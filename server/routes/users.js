@@ -46,11 +46,13 @@ router.get('/', async (req, res, next) => {
     const [countRows] = await pool.query(countSql, params);
     const total = countRows[0]?.total || 0;
 
+    const sortOrder = (query.order && query.order.toLowerCase() === 'desc') ? 'DESC' : 'ASC';
+
     const listSql = `
       SELECT id, username, email, full_name, school_id, role, is_active, created_at
       FROM users
       ${whereSql}
-      ORDER BY id DESC
+      ORDER BY id ${sortOrder}
       LIMIT ? OFFSET ?
     `;
 
