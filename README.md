@@ -1,10 +1,58 @@
 # CampusPass: Online Event Registration System
 
-CampusPass is a full-stack web application designed for school event registration. It serves as the **System Under Test (SUT)** for a Software Quality & Testing (STLC) group project, built with high traceability, deterministic test seed data, and comprehensive test selectors (`data-testid`).
+CampusPass is a full-stack web application designed for school event registration. Written in **plain JavaScript** with a clean and simple structure, it serves as the **System Under Test (SUT)** for a Software Quality & Testing (STLC) group project, built with high traceability, deterministic test seed data, and comprehensive test selectors (`data-testid`).
 
 ---
 
-## 1. Prerequisites
+## 1. Project Directory Structure
+
+```text
+├── server/
+│   ├── index.js              # Express app setup and static/Vite middleware
+│   ├── db.js                 # MySQL connection pool and emulated fallback engine
+│   ├── middleware.js         # Auth, role check, rate limiters, centralized error handler
+│   ├── validators.js         # Zod input validation schemas
+│   ├── reset.js              # Database reset and deterministic seeding runner
+│   ├── schema.sql            # DDL for users, events, registrations, notifications
+│   ├── seed-data.js          # Realistic seed records for STLC testing
+│   └── routes/
+│       ├── auth.js           # /api/auth (register, login, logout, me)
+│       ├── events.js         # /api/events (list, filter, create, edit, delete)
+│       ├── registrations.js  # /api/events (register, cancel, decisions, tickets)
+│       ├── notifications.js  # /api/notifications (feed, read, read-all)
+│       └── users.js          # /api/users (admin list, role update, toggle active)
+├── src/
+│   ├── api.js                # Shared client API fetcher (credentials: 'include')
+│   ├── App.jsx               # Application root, routing, system down watcher
+│   ├── main.jsx              # React DOM entry point
+│   ├── index.css             # Tailwind CSS global styles
+│   ├── context/
+│   │   ├── AuthContext.jsx   # Single source of truth auth context
+│   │   └── ToastContext.jsx  # Notification toast system
+│   ├── pages/
+│   │   ├── HomePage.jsx                 # Public event directory & filters
+│   │   ├── EventDetailPage.jsx          # Event details & pass claiming
+│   │   ├── LoginPage.jsx                # User authentication with rate countdown
+│   │   ├── RegisterPage.jsx             # Participant registration
+│   │   ├── ParticipantDashboardPage.jsx # Ticket management
+│   │   ├── OrganizerDashboardPage.jsx   # Event management & decision queue
+│   │   ├── AdminDashboardPage.jsx       # User administration
+│   │   ├── NotificationsPage.jsx        # Notification center
+│   │   ├── SystemDownPage.jsx           # Outage diagnostic screen
+│   │   └── NotFoundPage.jsx             # 404 page
+│   └── components/
+│       ├── common/           # Header, Footer, SeatStrip, ConfirmDialog, etc.
+│       └── events/           # EventTicketCard, EventFilters
+├── docs/
+│   ├── FRD.md                # Functional Requirements Document (complete specifications)
+│   └── REQUIREMENTS_MAP.md   # STLC Requirement Traceability Matrix (FR/NFR)
+├── vite.config.js            # Vite build configuration
+└── package.json              # Scripts and dependencies (plain JavaScript only)
+```
+
+---
+
+## 2. Prerequisites
 
 - **Node.js**: Version 20.0.0 or higher
 - **Package Manager**: npm 9+
@@ -14,7 +62,7 @@ CampusPass is a full-stack web application designed for school event registratio
 
 ---
 
-## 2. Environment Configuration
+## 3. Environment Configuration
 
 1. Copy `.env.example` to `.env`:
    ```bash
@@ -53,23 +101,23 @@ CampusPass is a full-stack web application designed for school event registratio
 
 ---
 
-## 3. Database Initialization & Reset
+## 4. Database Initialization & Reset
 
-Run the single-command reset script to drop, recreate tables, and seed all test accounts, events, registrations, and notifications:
+Run the reset script to drop, recreate tables, and seed all test accounts, events, registrations, and notifications:
 
 ```bash
 npm run db:reset
 ```
 
-This runs `src/server/db/reset.ts`, which:
-1. Executes `src/server/db/schema.sql` against MySQL/MariaDB.
+This runs `server/reset.js`, which:
+1. Executes `server/schema.sql` against MySQL/MariaDB (or in-memory fallback).
 2. Generates bcrypt hashes (cost 12) for all users with the shared password `Test@1234`.
 3. Seeds 20 realistic campus events covering all testing edge cases.
 4. Seeds registrations across all 4 statuses (`pending`, `approved`, `rejected`, `cancelled`).
 
 ---
 
-## 4. Running the Application
+## 5. Running the Application
 
 Start the unified development server:
 ```bash
@@ -81,9 +129,15 @@ The Express API and Vite React frontend are mounted together on:
 http://localhost:3000
 ```
 
+To build for production:
+```bash
+npm run build
+npm start
+```
+
 ---
 
-## 5. Seeded Accounts Catalog
+## 6. Seeded Accounts Catalog
 
 All accounts share the documented password: **`Test@1234`**
 
@@ -99,42 +153,9 @@ All accounts share the documented password: **`Test@1234`**
 
 ---
 
-## 6. Special-Case Test Events
-
-| ID | Title | Test Condition Under Test | Expected Behavior |
-|---|---|---|---|
-| **1** | Annual Research Colloquium | Open event with existing seats | Seats decrement on registration; pass reference code generated |
-| **3** | Voluntary Blood Donation Drive | Requires organizer approval (`requires_approval = 1`) | Status set to `pending`; appears in Organizer decision queue |
-| **4** | Advanced Marine Simulator Masterclass | **FULL EVENT (capacity 2, 2 approved)** | Rotated FULL stamp; registration rejected with 409 `EVENT_FULL` |
-| **5** | Inter-Collegiate Parliamentary Debate Briefing | **Deadline in the past** (`NOW() - 1 DAY`) | Registration rejected with 409 `DEADLINE_PASSED` |
-| **6** | Robotics Prototyping Workshop | **Already started** (`NOW() - 2 HOURS`) | Registration rejected with 409 `EVENT_STARTED` |
-| **7** | Charity 5K Fun Run | **Cancelled event** | Rotated CANCELLED stamp; registration rejected with 409 `EVENT_CANCELLED` |
-| **8** | First Semester Freshmen Orientation | **Ended event in past** (`NOW() - 14 DAYS`) | Read-only in Past events toggle; displays Ended label |
-| **9** | Collegiate Leadership Roundtable | **Ended event in past** (`NOW() - 7 DAYS`) | Read-only in Past events toggle; displays Ended label |
-
----
-
 ## 7. Requirement Traceability Matrix (RTM)
 
 A complete mapping from every Functional Requirement (**FR-001** through **FR-016**) and Non-Functional Requirement (**NFR-001** through **NFR-009**) to UI routes, API endpoints, test selectors (`data-testid`), and test data is documented in:
 ```
 docs/REQUIREMENTS_MAP.md
 ```
-
----
-
-## 8. Library Justification
-
-Only explicitly allowed libraries are utilized:
-- **`zod`**: Schema validation on client and server to guarantee identical validation rules and prevent injection.
-- **`bcrypt`**: Password hashing enforced at cost 12 (NFR-002).
-- **`jsonwebtoken`**: Stateless session token generation for 2-hour cookie storage (NFR-002, NFR-008).
-- **`cookie-parser`**: Parses secure httpOnly cookies.
-- **`helmet`**: Security headers injection (NFR-002).
-- **`cors`**: Origin-restricted Cross-Origin Resource Sharing.
-- **`express-rate-limit`**: Enforces per-endpoint request throttling with live client countdown headers.
-- **`dotenv`**: Environment variable loading.
-- **`mysql2`**: Parameterized MySQL/MariaDB database driver (NFR-004, NFR-008).
-- **`react-router-dom`**: Client-side routing with role-gated guards.
-- **`lucide-react`**: Accessible icons for status and landmarks.
-- **`concurrently`**: Concurrently orchestrates build/development workflows.
