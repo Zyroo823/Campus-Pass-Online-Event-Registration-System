@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
+import { formatFee } from '../utils/formatters.js';
 import { Calendar, MapPin, Ticket as TicketIcon, ArrowRight } from 'lucide-react';
 
 export const ParticipantDashboardPage = () => {
@@ -40,10 +41,17 @@ export const ParticipantDashboardPage = () => {
     if (!selectedTicketToCancel) return;
     setCancelling(true);
     try {
-      const res = await api.post(`/api/events/${selectedTicketToCancel.event_id}/cancel`);
-      showToast(res.message, 'success');
+      const res = await api.patch(`/api/registrations/${selectedTicketToCancel.registration_id}/cancel`);
+      showToast(res.message || 'Your pass was cancelled.', 'success');
+      // Update the ticket status locally immediately so the seat is freed and ticket shows CANCELLED stamp with no actions
+      setTickets(prev =>
+        prev.map(t =>
+          t.registration_id === selectedTicketToCancel.registration_id
+            ? { ...t, registration_status: 'cancelled' }
+            : t
+        )
+      );
       setSelectedTicketToCancel(null);
-      fetchTickets();
     } catch (err) {
       showToast(err.message || 'Failed to cancel registration.', 'error');
     } finally {
@@ -156,9 +164,13 @@ export const ParticipantDashboardPage = () => {
                       <div className="p-5 space-y-3">
                         <div className="flex items-start justify-between gap-4">
                           <div>
-                            <span className="text-xs font-mono text-ink-muted uppercase">
-                              {ticket.category}
-                            </span>
+                            <div className="flex items-center gap-2 text-xs font-mono text-ink-muted uppercase mb-1">
+                              <span>{ticket.category}</span>
+                              <span>·</span>
+                              <span data-testid="event-fee-label" className="font-bold text-ink">
+                                {formatFee(ticket.fee_amount)}
+                              </span>
+                            </div>
                             <h3 className="font-display font-bold text-lg text-ink leading-snug">
                               {ticket.title}
                             </h3>
@@ -224,11 +236,11 @@ export const ParticipantDashboardPage = () => {
                         {canCancel && (
                           <button
                             type="button"
-                            data-testid={`cancel-ticket-btn-${ticket.registration_id}`}
+                            data-testid="cancel-pass-button"
                             onClick={() => setSelectedTicketToCancel(ticket)}
                             className="px-2.5 py-1 text-xs font-mono font-bold border border-ink text-vermilion hover:bg-vermilion hover:text-paper transition-colors cursor-pointer"
                           >
-                            Cancel Pass
+                            Cancel pass
                           </button>
                         )}
                       </div>
@@ -243,11 +255,13 @@ export const ParticipantDashboardPage = () => {
 
       <ConfirmDialog
         isOpen={Boolean(selectedTicketToCancel)}
-        title="Cancel Registration"
+        title={`Cancel your pass for ${selectedTicketToCancel?.title || 'this event'}?`}
         itemName={selectedTicketToCancel?.title || ''}
         actionType="cancel"
+        dialogTestId="cancel-pass-dialog"
+        confirmTestId="cancel-pass-confirm"
         confirmLabel={cancelling ? 'Cancelling...' : 'Confirm Cancellation'}
-        message="Are you sure you want to surrender your pass for this event? Your seat will be returned to the open pool."
+        message="Are you sure you want to cancel your pass for this event? Your seat will be freed immediately and returned to the open pool."
         onConfirm={handleConfirmCancel}
         onClose={() => setSelectedTicketToCancel(null)}
       />

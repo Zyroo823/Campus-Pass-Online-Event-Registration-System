@@ -41,14 +41,29 @@ router.patch('/:id/read', authenticate, async (req, res, next) => {
   }
 });
 
-// POST /api/notifications/read-all
-router.post('/read-all', authenticate, async (req, res, next) => {
+// PATCH /api/notifications/read-all (FR-013)
+router.patch('/read-all', authenticate, async (req, res, next) => {
   try {
-    await pool.execute(
-      'UPDATE notifications SET is_read = 1 WHERE user_id = ?',
+    const [result] = await pool.execute(
+      'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0',
       [req.user.id]
     );
-    res.status(200).json({ message: 'All notifications marked as read.' });
+    const updated = Number(result?.affectedRows || 0);
+    res.status(200).json({ message: 'All notifications marked as read.', updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/notifications/read-all (Alias for compatibility)
+router.post('/read-all', authenticate, async (req, res, next) => {
+  try {
+    const [result] = await pool.execute(
+      'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0',
+      [req.user.id]
+    );
+    const updated = Number(result?.affectedRows || 0);
+    res.status(200).json({ message: 'All notifications marked as read.', updated });
   } catch (err) {
     next(err);
   }

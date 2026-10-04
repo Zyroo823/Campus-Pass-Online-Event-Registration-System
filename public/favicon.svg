@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Ink background square -->
+  <rect width="32" height="32" rx="4" fill="#111110"/>
+  <!-- Paper colored text "CP" -->
+  <text x="14" y="23" font-family="monospace, monospace" font-weight="900" font-size="18" fill="#F6F3EC" text-anchor="middle" letter-spacing="-1">CP</text>
+  <!-- Vermilion accent dot -->
+  <rect x="25" y="6" width="3" height="3" fill="#C84B31"/>
+</svg>

@@ -60,6 +60,7 @@ async function getEventDetails(eventId) {
 
   return {
     ...ev,
+    fee_amount: Number(ev.fee_amount) || 0,
     approved_count: approved,
     pending_count: pending,
     total_booked: approved + pending,
@@ -253,12 +254,13 @@ router.post('/', authenticate, requireRole('organizer', 'admin'), eventMutateLim
   try {
     const data = eventFormSchema.parse(req.body);
     const organizerId = req.user.id;
+    const fee = Number(data.fee_amount) || 0;
 
     const [result] = await pool.execute(
       `INSERT INTO events (
         organizer_id, title, description, category, venue, starts_at, ends_at,
-        registration_deadline, capacity, requires_approval, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published')`,
+        registration_deadline, capacity, fee_amount, requires_approval, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published')`,
       [
         organizerId,
         data.title,
@@ -269,6 +271,7 @@ router.post('/', authenticate, requireRole('organizer', 'admin'), eventMutateLim
         data.ends_at,
         data.registration_deadline,
         data.capacity,
+        fee,
         data.requires_approval,
       ]
     );
@@ -295,6 +298,7 @@ router.put(
       const eventId = Number(req.params.id);
       const data = eventFormSchema.parse(req.body);
       const current = await getEventDetails(eventId);
+      const fee = Number(data.fee_amount) || 0;
 
       const bookedCount = current.approved_count + current.pending_count;
       if (data.capacity < bookedCount) {
@@ -316,6 +320,7 @@ router.put(
           ends_at = ?,
           registration_deadline = ?,
           capacity = ?,
+          fee_amount = ?,
           requires_approval = ?
         WHERE id = ?`,
         [
@@ -327,12 +332,13 @@ router.put(
           data.ends_at,
           data.registration_deadline,
           data.capacity,
+          fee,
           data.requires_approval,
           eventId,
         ]
       );
 
-      // Notify registered participants
+      // Notify registered participants if details or fee changed
       const [attendees] = await pool.query(
         "SELECT user_id FROM registrations WHERE event_id = ? AND status IN ('approved', 'pending')",
         [eventId]
@@ -471,7 +477,8 @@ router.get(
         [eventId]
       );
 
-      const headers = ['Registration ID', 'Reference Code', 'Full Name', 'School ID', 'Username', 'Email', 'Status', 'Registered At', 'Decided At'];
+      const headers = ['Registration ID', 'Reference Code', 'Full Name', 'School ID', 'Username', 'Email', 'Fee', 'Status', 'Registered At', 'Decided At'];
+      const feeLabel = event.fee_amount > 0 ? Number(event.fee_amount).toFixed(2) : 'Free';
       const rows = attendees.map((a) => {
         const ref = `EVT-${String(eventId).padStart(4, '0')}-${String(a.registration_id).padStart(4, '0')}`;
         return [
@@ -481,6 +488,7 @@ router.get(
           `"${String(a.school_id || '').replace(/"/g, '""')}"`,
           `"${String(a.username || '').replace(/"/g, '""')}"`,
           `"${String(a.email || '').replace(/"/g, '""')}"`,
+          feeLabel,
           a.status,
           a.registered_at,
           a.decided_at || 'N/A',

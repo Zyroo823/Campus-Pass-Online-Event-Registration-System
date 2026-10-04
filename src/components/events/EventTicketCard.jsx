@@ -8,6 +8,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { SeatStrip } from '../common/SeatStrip.jsx';
 import { MapPin, Clock, ArrowRight } from 'lucide-react';
+import { formatFee } from '../../utils/formatters.js';
 
 export const EventTicketCard = ({
   event,
@@ -98,8 +99,14 @@ export const EventTicketCard = ({
       {/* 3. Stub with Perforation divider */}
       <div className="border-t-2 md:border-t-0 md:border-l-2 border-dashed border-ink md:w-60 p-4 bg-paper-light flex flex-col justify-between gap-3 shrink-0">
         <div>
-          <div className="text-xs font-mono text-[#38342B] uppercase tracking-wider mb-1 font-medium">
-            Pass Admission
+          <div className="flex items-center justify-between text-xs font-mono text-[#38342B] uppercase tracking-wider mb-1 font-medium">
+            <span>Pass Admission</span>
+            <span
+              data-testid="event-fee-label"
+              className="font-bold text-ink"
+            >
+              {formatFee(event.fee_amount)}
+            </span>
           </div>
           <SeatStrip
             capacity={event.capacity}

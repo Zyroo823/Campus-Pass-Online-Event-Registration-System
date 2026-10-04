@@ -53,6 +53,7 @@ export async function resetInMemoryDb() {
 
   inMemTables.events = events.map((e, idx) => ({
     ...e,
+    fee_amount: Number(e.fee_amount) || 0,
     id: idx + 1,
     created_at: '2026-09-05 00:00:00',
     updated_at: '2026-09-05 00:00:00',
@@ -184,13 +185,22 @@ async function queryEmulated(sql, params = []) {
   // 6. UPDATE users SET role = ?, is_active = ? WHERE id = ?
   if (cleanSql.startsWith('UPDATE users SET')) {
     let pIdx = 0;
+    let newFullName;
+    let newEmail;
+    let newSchoolId;
     let newRole;
     let newActive;
+    if (cleanSql.includes('full_name = ?')) newFullName = params[pIdx++];
+    if (cleanSql.includes('email = ?')) newEmail = params[pIdx++];
+    if (cleanSql.includes('school_id = ?')) newSchoolId = params[pIdx++];
     if (cleanSql.includes('role = ?')) newRole = params[pIdx++];
     if (cleanSql.includes('is_active = ?')) newActive = params[pIdx++];
     const id = Number(params[pIdx++]);
     const u = inMemTables.users.find(x => x.id === id);
     if (u) {
+      if (newFullName !== undefined) u.full_name = newFullName;
+      if (newEmail !== undefined) u.email = newEmail;
+      if (newSchoolId !== undefined) u.school_id = newSchoolId;
       if (newRole !== undefined) u.role = newRole;
       if (newActive !== undefined) u.is_active = Number(newActive);
       return [{ affectedRows: 1 }, []];
@@ -305,7 +315,7 @@ async function queryEmulated(sql, params = []) {
 
   // 9. INSERT INTO events
   if (cleanSql.startsWith('INSERT INTO events')) {
-    const [organizer_id, title, description, category, venue, starts_at, ends_at, registration_deadline, capacity, requires_approval, status] = params;
+    const [organizer_id, title, description, category, venue, starts_at, ends_at, registration_deadline, capacity, fee_amount, requires_approval, status] = params;
     const newEvent = {
       id: eventNextId++,
       organizer_id: Number(organizer_id),
@@ -317,6 +327,7 @@ async function queryEmulated(sql, params = []) {
       ends_at,
       registration_deadline,
       capacity: Number(capacity),
+      fee_amount: Number(fee_amount) || 0,
       requires_approval: Number(requires_approval) || 0,
       status: status || 'published',
       created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
@@ -334,7 +345,7 @@ async function queryEmulated(sql, params = []) {
       if (cleanSql.includes('status = ?')) {
         ev.status = params[0];
       } else {
-        const [title, description, category, venue, starts_at, ends_at, registration_deadline, capacity, requires_approval] = params;
+        const [title, description, category, venue, starts_at, ends_at, registration_deadline, capacity, fee_amount, requires_approval] = params;
         ev.title = title;
         ev.description = description;
         ev.category = category;
@@ -343,6 +354,7 @@ async function queryEmulated(sql, params = []) {
         ev.ends_at = ends_at;
         ev.registration_deadline = registration_deadline;
         ev.capacity = Number(capacity);
+        ev.fee_amount = Number(fee_amount) || 0;
         ev.requires_approval = Number(requires_approval);
       }
       ev.updated_at = new Date().toISOString().replace('T', ' ').slice(0, 19);
@@ -369,6 +381,31 @@ async function queryEmulated(sql, params = []) {
     return [regs, []];
   }
 
+  // 12b. Registrations with Event details (for cancel pass)
+  if (cleanSql.includes('FROM registrations r') && cleanSql.includes('JOIN events e ON r.event_id = e.id') && (cleanSql.includes('WHERE r.id = ?') || cleanSql.includes('WHERE r.event_id = ?'))) {
+    let reg;
+    if (cleanSql.includes('WHERE r.id = ?')) {
+      const regId = Number(params[0]);
+      reg = inMemTables.registrations.find(r => r.id === regId);
+    } else {
+      const eId = Number(params[0]);
+      const uId = Number(params[1]);
+      reg = inMemTables.registrations.find(r => r.event_id === eId && r.user_id === uId);
+    }
+
+    if (!reg) return [[], []];
+
+    const ev = inMemTables.events.find(e => e.id === reg.event_id) || {};
+    return [[{
+      ...reg,
+      starts_at: ev.starts_at,
+      ends_at: ev.ends_at,
+      title: ev.title,
+      event_title: ev.title,
+      venue: ev.venue,
+    }], []];
+  }
+
   // 13. Registrations: participant tickets list
   if (cleanSql.includes('FROM registrations r') && cleanSql.includes('JOIN events e ON r.event_id = e.id') && cleanSql.includes('r.user_id = ?')) {
     const uId = Number(params[0]);
@@ -378,22 +415,30 @@ async function queryEmulated(sql, params = []) {
       const org = inMemTables.users.find(u => u.id === ev.organizer_id) || {};
       return {
         registration_id: r.id,
+        id: r.id,
         event_id: r.event_id,
         user_id: r.user_id,
         status: r.status,
+        registration_status: r.status,
         registered_at: r.registered_at,
         decided_at: r.decided_at,
         reference_code: `EVT-${String(r.event_id).padStart(4, '0')}-${String(r.id).padStart(4, '0')}`,
+        title: ev.title,
         event_title: ev.title,
+        description: ev.description || '',
         category: ev.category,
         venue: ev.venue,
+        fee_amount: ev.fee_amount || 0,
         starts_at: ev.starts_at,
         ends_at: ev.ends_at,
+        registration_deadline: ev.registration_deadline,
+        capacity: ev.capacity,
+        requires_approval: ev.requires_approval,
         event_status: ev.status,
         organizer_name: org.full_name || 'Organizer',
       };
     });
-    results.sort((a, b) => (b.registered_at || '').localeCompare(a.registered_at || ''));
+    results.sort((a, b) => (a.starts_at || '').localeCompare(b.starts_at || ''));
     return [results, []];
   }
 
@@ -443,25 +488,29 @@ async function queryEmulated(sql, params = []) {
 
   // 17. UPDATE registrations (status / cancel / approve / reject)
   if (cleanSql.startsWith('UPDATE registrations SET')) {
-    let pIdx = 0;
-    let newStatus = params[pIdx++];
-    let regId;
-    let eventId;
-    let userId;
-
-    if (cleanSql.includes('decided_at = NOW()')) {
-      regId = Number(params[pIdx++]);
-      eventId = Number(params[pIdx++]);
-    } else {
-      eventId = Number(params[pIdx++]);
-      userId = Number(params[pIdx++]);
+    let newStatus = 'cancelled';
+    if (cleanSql.includes("status = 'cancelled'")) {
+      newStatus = 'cancelled';
+    } else if (cleanSql.includes("status = 'approved'")) {
+      newStatus = 'approved';
+    } else if (cleanSql.includes("status = 'rejected'")) {
+      newStatus = 'rejected';
+    } else if (params.length > 0 && typeof params[0] === 'string' && ['pending', 'approved', 'rejected', 'cancelled'].includes(params[0])) {
+      newStatus = params[0];
     }
 
     let r;
-    if (regId) {
-      r = inMemTables.registrations.find(x => x.id === regId && x.event_id === eventId);
-    } else {
+    if (cleanSql.includes('WHERE id = ?')) {
+      const regId = Number(params[params.length - 1]);
+      r = inMemTables.registrations.find(x => x.id === regId);
+    } else if (cleanSql.includes('WHERE event_id = ? AND user_id = ?')) {
+      const eventId = Number(params[params.length - 2]);
+      const userId = Number(params[params.length - 1]);
       r = inMemTables.registrations.find(x => x.event_id === eventId && x.user_id === userId);
+    } else if (cleanSql.includes('WHERE id = ? AND event_id = ?')) {
+      const regId = Number(params[params.length - 2]);
+      const eventId = Number(params[params.length - 1]);
+      r = inMemTables.registrations.find(x => x.id === regId && x.event_id === eventId);
     }
 
     if (r) {
@@ -500,14 +549,16 @@ async function queryEmulated(sql, params = []) {
   if (cleanSql.startsWith('UPDATE notifications SET is_read = 1')) {
     const uId = Number(params[0]);
     const nId = params[1] !== undefined ? Number(params[1]) : null;
+    let count = 0;
     inMemTables.notifications.forEach(n => {
       if (n.user_id === uId) {
         if (!nId || n.id === nId) {
+          if (n.is_read === 0) count++;
           n.is_read = 1;
         }
       }
     });
-    return [{ affectedRows: 1 }, []];
+    return [{ affectedRows: count || 1 }, []];
   }
 
   return [[], []];

@@ -65,9 +65,9 @@ export async function runReset() {
     const events = generateSeedEvents();
     for (const e of events) {
       await conn.execute(
-        `INSERT INTO events (organizer_id, title, description, category, venue, starts_at, ends_at, registration_deadline, capacity, requires_approval, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [e.organizer_id, e.title, e.description, e.category, e.venue, e.starts_at, e.ends_at, e.registration_deadline, e.capacity, e.requires_approval, e.status]
+        `INSERT INTO events (organizer_id, title, description, category, venue, starts_at, ends_at, registration_deadline, capacity, fee_amount, requires_approval, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [e.organizer_id, e.title, e.description, e.category, e.venue, e.starts_at, e.ends_at, e.registration_deadline, e.capacity, e.fee_amount || 0, e.requires_approval, e.status]
       );
     }
 
@@ -104,8 +104,8 @@ export async function runReset() {
   console.log('Default credentials for testing:');
   console.log('Password (all accounts): Test@1234');
   console.log('- Admin: admin01');
-  console.log('- Organizers: organizer01, organizer02');
-  console.log('- Students: student01 to student12 (student12 is deactivated)');
+  console.log('- Organizer: organizer01');
+  console.log('- Students: student01, student02, student03, student04');
   console.log('----------------------------------------------------');
 }
 

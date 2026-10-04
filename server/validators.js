@@ -113,6 +113,26 @@ const baseEventSchema = z.object({
     .int({ message: 'Capacity must be a whole number' })
     .min(1, { message: 'Capacity must be between 1 and 1000 seats' })
     .max(1000, { message: 'Capacity cannot exceed 1000 seats' }),
+  fee_amount: z
+    .union([z.string(), z.number()])
+    .optional()
+    .transform(val => {
+      if (val === undefined || val === null || val === '') return 0;
+      return typeof val === 'string' ? val.trim() : val;
+    })
+    .refine(val => {
+      if (val === 0 || val === '0') return true;
+      const str = String(val);
+      if (!/^\d+(\.\d{1,2})?$/.test(str)) return false;
+      const num = Number(str);
+      return !isNaN(num) && num >= 0 && num <= 50000;
+    }, {
+      message: 'Entrance fee must be between 0 and 50,000, with up to 2 decimal places.',
+    })
+    .transform(val => {
+      const num = Number(val);
+      return isNaN(num) ? 0 : Number(num.toFixed(2));
+    }),
   requires_approval: z
     .union([z.boolean(), z.number()])
     .transform(val => (val === true || val === 1 ? 1 : 0)),
@@ -173,6 +193,24 @@ export const registrationDecisionSchema = z.object({
 // User Admin Validators (FR-016)
 // ============================================================================
 export const updateUserSchema = z.object({
+  full_name: z
+    .string()
+    .trim()
+    .min(2, { message: 'Full name must be at least 2 characters long' })
+    .max(100, { message: 'Full name cannot exceed 100 characters' })
+    .optional(),
+  email: z
+    .string()
+    .trim()
+    .email({ message: 'Please provide a valid email address' })
+    .max(255)
+    .optional(),
+  school_id: z
+    .string()
+    .trim()
+    .min(3, { message: 'School ID must be at least 3 characters long' })
+    .max(50)
+    .optional(),
   role: z.enum(['participant', 'organizer', 'admin']).optional(),
   is_active: z.union([z.boolean(), z.number()]).transform(val => (val === true || val === 1 ? 1 : 0)).optional(),
 });

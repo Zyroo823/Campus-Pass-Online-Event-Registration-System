@@ -1,8 +1,8 @@
 /**
  * Organizer Dashboard
  * FR-014: Dense table of organizer's events with seat strips; "Needs your decision" queue on top
- * FR-009: Create events
- * FR-010: Edit own events
+ * FR-009: Create events (with entrance fee)
+ * FR-010: Edit own events (with entrance fee)
  * FR-011: Delete event (no registrations) or Cancel event (with registrations)
  * FR-012: Approve/reject pending registrations
  * FR-015: Attendee list viewer and CSV export
@@ -14,6 +14,7 @@ import { api, ClientApiError } from '../api.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { SeatStrip } from '../components/common/SeatStrip.jsx';
+import { formatFee } from '../utils/formatters.js';
 import {
   Plus,
   Edit,
@@ -57,6 +58,7 @@ export const OrganizerDashboardPage = () => {
     ends_at: '',
     registration_deadline: '',
     capacity: 50,
+    fee_amount: '',
     requires_approval: false,
   });
   const [formErrors, setFormErrors] = useState({});
@@ -107,6 +109,7 @@ export const OrganizerDashboardPage = () => {
       ends_at: '',
       registration_deadline: '',
       capacity: 50,
+      fee_amount: '',
       requires_approval: false,
     });
     setFormErrors({});
@@ -122,10 +125,11 @@ export const OrganizerDashboardPage = () => {
       description: ev.description,
       category: ev.category,
       venue: ev.venue,
-      starts_at: ev.starts_at.slice(0, 16).replace(' ', 'T'),
-      ends_at: ev.ends_at.slice(0, 16).replace(' ', 'T'),
-      registration_deadline: ev.registration_deadline.slice(0, 16).replace(' ', 'T'),
+      starts_at: ev.starts_at ? ev.starts_at.slice(0, 16).replace(' ', 'T') : '',
+      ends_at: ev.ends_at ? ev.ends_at.slice(0, 16).replace(' ', 'T') : '',
+      registration_deadline: ev.registration_deadline ? ev.registration_deadline.slice(0, 16).replace(' ', 'T') : '',
       capacity: ev.capacity,
+      fee_amount: ev.fee_amount > 0 ? String(ev.fee_amount) : '',
       requires_approval: Boolean(ev.requires_approval),
     });
     setFormErrors({});
@@ -162,6 +166,14 @@ export const OrganizerDashboardPage = () => {
       errs.capacity = 'Capacity must be between 1 and 1000 seats.';
     }
 
+    // Fee validation
+    const feeStr = String(formData.fee_amount || '').trim();
+    if (feeStr !== '') {
+      if (!/^\d+(\.\d{1,2})?$/.test(feeStr) || Number(feeStr) < 0 || Number(feeStr) > 50000) {
+        errs.fee_amount = 'Entrance fee must be between 0 and 50,000, with up to 2 decimal places.';
+      }
+    }
+
     if (formData.starts_at && new Date(formData.starts_at).getTime() <= Date.now() && !editingEvent) {
       errs.starts_at = 'Event start time must be in the future.';
     }
@@ -186,6 +198,7 @@ export const OrganizerDashboardPage = () => {
       const payload = {
         ...formData,
         capacity: Number(formData.capacity),
+        fee_amount: feeStr === '' ? 0 : Number(feeStr),
         requires_approval: formData.requires_approval ? 1 : 0,
       };
 
@@ -249,10 +262,10 @@ export const OrganizerDashboardPage = () => {
       <section className="border-b-2 border-ink pb-4 mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span className="text-xs font-mono font-bold tracking-widest text-ink-muted uppercase">
-            Staff & Organization Console
+            Faculty &amp; Staff Administration
           </span>
           <h1 data-testid="organizer-dashboard-title" className="font-display font-black text-3xl sm:text-4xl text-ink mt-1">
-            Organizer Event Operations
+            Organizer Dashboard
           </h1>
         </div>
 
@@ -260,218 +273,187 @@ export const OrganizerDashboardPage = () => {
           type="button"
           data-testid="create-event-btn"
           onClick={openCreateModal}
-          className="inline-flex items-center gap-2 px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider border-2 border-ink bg-vermilion text-paper hover:bg-vermilion-hover transition-colors shadow-hard cursor-pointer shrink-0"
+          className="inline-flex items-center gap-2 px-4 py-2 border-2 border-ink bg-vermilion text-paper font-mono text-xs font-bold uppercase shadow-hard hover:bg-vermilion-hover transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          <span>Post New Event</span>
+          <span>Create New Event</span>
         </button>
       </section>
 
-      {/* 1. "Needs Your Decision" Queue on Top (FR-012) */}
-      <section aria-labelledby="decision-queue-heading" className="mb-10">
-        <div className="flex items-center justify-between mb-3 border-b-2 border-ink pb-2">
-          <div className="flex items-center gap-2">
-            <Clock className="w-5 h-5 text-mustard shrink-0" />
-            <h2 id="decision-queue-heading" className="font-display font-bold text-xl text-ink">
-              Needs Your Decision
-            </h2>
-          </div>
-          <span
-            data-testid="pending-queue-count"
-            className="text-xs font-mono font-bold px-2 py-0.5 border border-ink bg-paper-dark"
-          >
-            {pendingQueue.length} pending
-          </span>
-        </div>
+      {/* 1. Pending Approvals Queue (FR-012) */}
+      {pendingQueue.length > 0 && (
+        <section aria-labelledby="decision-queue-heading" className="mb-10">
+          <div className="bg-mustard-faint border-2 border-ink shadow-hard p-5 space-y-4">
+            <div className="flex items-center justify-between border-b-2 border-ink pb-3">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-mustard" />
+                <h2 id="decision-queue-heading" className="font-display font-bold text-lg text-ink">
+                  Needs Your Decision ({pendingQueue.length})
+                </h2>
+              </div>
+              <span className="text-xs font-mono text-ink-muted">
+                Action required for restricted events
+              </span>
+            </div>
 
-        {pendingQueue.length === 0 ? (
-          <div
-            data-testid="empty-decision-queue"
-            className="p-5 border-2 border-dashed border-ink/40 bg-paper-light text-center font-mono text-xs text-ink-muted"
-          >
-            No applications are currently awaiting approval. All registration queues are clear.
-          </div>
-        ) : (
-          <div className="border-2 border-ink bg-paper overflow-x-auto shadow-hard-sm">
-            <table className="w-full text-left border-collapse text-xs font-mono">
-              <thead>
-                <tr className="bg-paper-dark border-b-2 border-ink text-ink font-bold uppercase tracking-wider">
-                  <th className="p-3 border-r border-ink/30">Event</th>
-                  <th className="p-3 border-r border-ink/30">Applicant</th>
-                  <th className="p-3 border-r border-ink/30">School ID</th>
-                  <th className="p-3 border-r border-ink/30">Email</th>
-                  <th className="p-3 border-r border-ink/30">Registered At</th>
-                  <th className="p-3 text-right">Decision Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingQueue.map(item => (
-                  <tr
-                    key={item.registration_id}
-                    data-testid={`decision-row-${item.registration_id}`}
-                    className="border-b border-ink/20 hover:bg-paper-light"
-                  >
-                    <td className="p-3 font-semibold text-ink border-r border-ink/20">
-                      {item.event_title}
-                    </td>
-                    <td className="p-3 text-ink font-body border-r border-ink/20">
-                      {item.full_name}
-                    </td>
-                    <td className="p-3 text-ink border-r border-ink/20">
-                      {item.school_id}
-                    </td>
-                    <td className="p-3 text-ink-muted border-r border-ink/20">
-                      {item.email}
-                    </td>
-                    <td className="p-3 text-ink-muted border-r border-ink/20">
-                      {new Date(item.registered_at).toLocaleDateString()}
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          data-testid={`approve-btn-${item.registration_id}`}
-                          onClick={() => handleDecision(item.event_id, item.registration_id, 'approved')}
-                          className="px-2.5 py-1 border border-ink bg-olive text-paper hover:bg-olive-hover font-bold text-xs cursor-pointer shadow-hard-sm"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          data-testid={`reject-btn-${item.registration_id}`}
-                          onClick={() => handleDecision(item.event_id, item.registration_id, 'rejected')}
-                          className="px-2.5 py-1 border border-ink bg-paper text-vermilion hover:bg-vermilion hover:text-paper font-bold text-xs cursor-pointer shadow-hard-sm"
-                        >
-                          Decline
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+            <div className="divide-y divide-ink/20 bg-paper border border-ink overflow-hidden">
+              {pendingQueue.map((item) => (
+                <div
+                  key={item.registration_id}
+                  data-testid={`decision-row-${item.registration_id}`}
+                  className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono font-bold text-xs bg-paper-dark border border-ink px-1.5 py-0.5">
+                        {item.school_id}
+                      </span>
+                      <span className="font-display font-bold text-sm text-ink">{item.full_name}</span>
+                      <span className="text-xs font-mono text-ink-muted">({item.email})</span>
+                    </div>
+                    <div className="text-xs font-mono text-ink-muted">
+                      Requesting seat for: <strong className="text-ink">{item.event_title}</strong>
+                    </div>
+                  </div>
 
-      {/* 2. Dense Table of Managed Events with Seat Strips (FR-014) */}
-      <section aria-labelledby="managed-events-heading">
-        <div className="flex items-center justify-between mb-3 border-b-2 border-ink pb-2">
-          <h2 id="managed-events-heading" className="font-display font-bold text-xl text-ink">
-            Your Managed Events
-          </h2>
-          <span className="text-xs font-mono text-ink-muted">
-            {events.length} {events.length === 1 ? 'event listed' : 'events listed'}
-          </span>
-        </div>
+                  <div className="flex items-center gap-2 self-end sm:self-center">
+                    <button
+                      type="button"
+                      data-testid={`reject-btn-${item.registration_id}`}
+                      onClick={() => handleDecision(item.event_id, item.registration_id, 'reject')}
+                      className="px-3 py-1.5 border border-ink bg-paper text-ink hover:bg-paper-dark font-mono text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Decline
+                    </button>
+                    <button
+                      type="button"
+                      data-testid={`approve-btn-${item.registration_id}`}
+                      onClick={() => handleDecision(item.event_id, item.registration_id, 'approve')}
+                      className="px-3 py-1.5 border-2 border-ink bg-olive text-paper hover:bg-olive-hover font-mono text-xs font-bold shadow-hard-sm transition-colors cursor-pointer"
+                    >
+                      Approve Pass
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
-        {events.length === 0 ? (
-          <div
-            data-testid="empty-managed-events"
-            className="p-8 border-2 border-ink bg-paper text-center space-y-2 shadow-hard-sm"
-          >
-            <p className="font-display font-bold text-lg text-ink">No events posted yet.</p>
-            <p className="font-body text-xs text-ink-muted">
-              Click &ldquo;Post New Event&rdquo; above to publish your first academic or student session.
+      {/* 2. Dense Event Management Table (FR-014) */}
+      <section aria-labelledby="events-table-heading" className="space-y-4">
+        <h2 id="events-table-heading" className="font-display font-bold text-xl text-ink">
+          Your Published &amp; Hosted Events
+        </h2>
+
+        {loading ? (
+          <div className="p-8 border-2 border-ink bg-paper text-center font-mono text-xs text-ink-muted animate-pulse">
+            Loading managed events...
+          </div>
+        ) : events.length === 0 ? (
+          <div className="p-8 border-2 border-ink bg-paper text-center space-y-3 shadow-hard-sm">
+            <p className="font-display font-bold text-base text-ink">No hosted events found.</p>
+            <p className="text-xs font-body text-ink-muted">
+              Click &quot;Create New Event&quot; above to schedule your first academic or extracurricular session.
             </p>
           </div>
         ) : (
-          <div className="border-2 border-ink bg-paper overflow-x-auto shadow-hard-sm">
+          <div className="border-2 border-ink bg-paper shadow-hard overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs font-mono">
               <thead>
-                <tr className="bg-paper-dark border-b-2 border-ink text-ink font-bold uppercase tracking-wider">
-                  <th className="p-3 border-r border-ink/30">ID</th>
-                  <th className="p-3 border-r border-ink/30">Event Title & Venue</th>
-                  <th className="p-3 border-r border-ink/30">Category</th>
-                  <th className="p-3 border-r border-ink/30">Date & Schedule</th>
-                  <th className="p-3 border-r border-ink/30 w-52">Seat Status</th>
-                  <th className="p-3 border-r border-ink/30">Status</th>
-                  <th className="p-3 text-right">Manage Actions</th>
+                <tr className="bg-paper-dark border-b-2 border-ink text-ink font-bold">
+                  <th className="p-3 border-r border-ink/20">Event Title &amp; Category</th>
+                  <th className="p-3 border-r border-ink/20">Schedule &amp; Venue</th>
+                  <th className="p-3 border-r border-ink/20">Fee</th>
+                  <th className="p-3 border-r border-ink/20 min-w-[160px]">Seat Capacity</th>
+                  <th className="p-3 border-r border-ink/20">Status</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {events.map(ev => {
+              <tbody className="divide-y divide-ink/20">
+                {events.map((ev) => {
                   const isCancelled = ev.status === 'cancelled';
-                  const hasRegistrations = (ev.approved_count + ev.pending_count) > 0;
 
                   return (
-                    <tr
-                      key={ev.id}
-                      data-testid={`event-row-${ev.id}`}
-                      className="border-b border-ink/20 hover:bg-paper-light"
-                    >
-                      <td className="p-3 font-bold border-r border-ink/20">{ev.id}</td>
-                      <td className="p-3 border-r border-ink/20">
+                    <tr key={ev.id} data-testid={`organizer-event-row-${ev.id}`} className="hover:bg-paper-light">
+                      <td className="p-3 border-r border-ink/10">
                         <Link
                           to={`/events/${ev.id}`}
-                          className="font-display font-bold text-sm text-ink hover:text-vermilion block"
+                          className="font-display font-bold text-sm text-ink hover:text-vermilion transition-colors block mb-1"
                         >
                           {ev.title}
                         </Link>
-                        <span className="text-ink-muted">{ev.venue}</span>
+                        <span className="text-[11px] font-mono uppercase bg-paper-dark border border-ink/30 px-1.5 py-0.5">
+                          {ev.category}
+                        </span>
+                        {ev.requires_approval ? (
+                          <span className="ml-1.5 text-[11px] font-mono font-bold text-mustard uppercase">
+                            (Restricted)
+                          </span>
+                        ) : null}
                       </td>
-                      <td className="p-3 border-r border-ink/20">{ev.category}</td>
-                      <td className="p-3 border-r border-ink/20">
-                        <div>{new Date(ev.starts_at).toLocaleDateString()}</div>
-                        <div className="text-ink-muted">
-                          {new Date(ev.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
+
+                      <td className="p-3 border-r border-ink/10 text-ink-muted space-y-0.5">
+                        <div className="text-ink font-semibold">{new Date(ev.starts_at).toLocaleString()}</div>
+                        <div>{ev.venue}</div>
                       </td>
-                      <td className="p-3 border-r border-ink/20">
+
+                      <td className="p-3 border-r border-ink/10 font-bold text-ink">
+                        {formatFee(ev.fee_amount)}
+                      </td>
+
+                      <td className="p-3 border-r border-ink/10">
                         <SeatStrip
                           capacity={ev.capacity}
                           approvedCount={ev.approved_count}
                           seatsRemaining={ev.seats_remaining}
                           isCancelled={isCancelled}
+                          showExactRatio={true}
                         />
                       </td>
-                      <td className="p-3 border-r border-ink/20">
-                        <span
-                          className={`px-1.5 py-0.5 border text-xs font-bold uppercase ${
-                            isCancelled
-                              ? 'bg-paper text-ink line-through border-ink'
-                              : 'bg-olive-faint text-olive border-olive'
-                          }`}
-                        >
-                          {ev.status}
-                        </span>
+
+                      <td className="p-3 border-r border-ink/10">
+                        {isCancelled ? (
+                          <span className="px-2 py-0.5 border border-vermilion text-vermilion font-bold uppercase text-[10px]">
+                            Cancelled
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 border border-olive text-olive font-bold uppercase text-[10px]">
+                            Active
+                          </span>
+                        )}
                       </td>
+
                       <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* Attendee Roster (FR-015) */}
+                        <div className="inline-flex items-center gap-1.5">
                           <button
                             type="button"
                             data-testid={`view-attendees-btn-${ev.id}`}
                             onClick={() => openAttendeesModal(ev)}
-                            title="View registered attendees"
-                            className="p-1.5 border border-ink bg-paper hover:bg-paper-dark cursor-pointer text-ink"
+                            title="View Attendees"
+                            className="p-1.5 border border-ink bg-paper hover:bg-paper-dark text-ink cursor-pointer"
                           >
                             <Users className="w-3.5 h-3.5" />
                           </button>
-
-                          {/* Edit Event (FR-010) */}
                           <button
                             type="button"
                             data-testid={`edit-event-btn-${ev.id}`}
                             onClick={() => openEditModal(ev)}
-                            title="Edit event details"
-                            className="p-1.5 border border-ink bg-paper hover:bg-paper-dark cursor-pointer text-ink"
+                            title="Edit Event"
+                            className="p-1.5 border border-ink bg-paper hover:bg-paper-dark text-ink cursor-pointer"
                           >
                             <Edit className="w-3.5 h-3.5" />
                           </button>
-
-                          {/* Delete or Cancel (FR-011) */}
-                          {!isCancelled && (
-                            <button
-                              type="button"
-                              data-testid={`delete-event-btn-${ev.id}`}
-                              onClick={() => setEventToDelete(ev)}
-                              title={hasRegistrations ? 'Cancel event (has registrations)' : 'Delete event permanently'}
-                              className="p-1.5 border border-ink bg-paper hover:bg-vermilion hover:text-paper cursor-pointer text-vermilion"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            data-testid={`delete-event-btn-${ev.id}`}
+                            onClick={() => setEventToDelete(ev)}
+                            title={ev.approved_count + ev.pending_count > 0 ? 'Cancel Event' : 'Delete Event'}
+                            className="p-1.5 border border-ink bg-paper text-vermilion hover:bg-vermilion hover:text-paper cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -483,7 +465,7 @@ export const OrganizerDashboardPage = () => {
         )}
       </section>
 
-      {/* 3. Event Create / Edit Modal (FR-009, FR-010) */}
+      {/* 3. Create / Edit Event Modal (FR-009, FR-010) */}
       {isEventModalOpen && (
         <div
           role="dialog"
@@ -491,10 +473,10 @@ export const OrganizerDashboardPage = () => {
           aria-labelledby="event-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 overflow-y-auto"
         >
-          <div className="w-full max-w-2xl bg-paper border-2 border-ink shadow-hard-lg p-6 sm:p-8 my-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b-2 border-ink pb-3 mb-5">
-              <h2 id="event-modal-title" className="font-display font-bold text-2xl text-ink">
-                {editingEvent ? 'Modify Event Details' : 'Publish New Campus Event'}
+          <div className="w-full max-w-2xl bg-paper border-2 border-ink shadow-hard-lg p-6 flex flex-col my-8">
+            <div className="flex items-center justify-between border-b-2 border-ink pb-3 mb-4">
+              <h2 id="event-modal-title" className="font-display font-bold text-xl text-ink">
+                {editingEvent ? 'Edit Event Details' : 'Create New Campus Event'}
               </h2>
               <button
                 type="button"
@@ -661,8 +643,8 @@ export const OrganizerDashboardPage = () => {
                 </div>
               </div>
 
-              {/* Capacity & Requires Approval */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              {/* Capacity, Entrance Fee & Requires Approval */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
                 <div>
                   <label htmlFor="evt-capacity" className="block text-xs font-mono font-bold uppercase mb-1">
                     Total Capacity (1 - 1000) <span className="text-vermilion">*</span>
@@ -685,7 +667,27 @@ export const OrganizerDashboardPage = () => {
                   )}
                 </div>
 
-                <div className="flex items-center pt-5">
+                <div>
+                  <label htmlFor="evt-fee" className="block text-xs font-mono font-bold uppercase mb-1">
+                    Entrance Fee (PHP)
+                  </label>
+                  <input
+                    id="evt-fee"
+                    type="text"
+                    placeholder="0.00 (Blank = Free)"
+                    data-testid="event-fee"
+                    value={formData.fee_amount}
+                    onChange={e => setFormData({ ...formData, fee_amount: e.target.value })}
+                    className="w-full px-3 py-2 border-2 border-ink bg-paper-light text-sm font-mono text-ink placeholder:text-ink-muted focus:bg-paper"
+                  />
+                  {formErrors.fee_amount && (
+                    <p data-testid="field-error-fee_amount" className="text-xs font-mono text-vermilion mt-1">
+                      {formErrors.fee_amount}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center sm:pt-5">
                   <label
                     htmlFor="evt-approval"
                     className="flex items-center gap-2.5 text-xs font-mono font-bold text-ink cursor-pointer select-none"
@@ -698,7 +700,7 @@ export const OrganizerDashboardPage = () => {
                       onChange={e => setFormData({ ...formData, requires_approval: e.target.checked })}
                       className="w-4 h-4 border-2 border-ink text-vermilion rounded-none cursor-pointer"
                     />
-                    <span>Requires Organizer Approval</span>
+                    <span>Requires Approval</span>
                   </label>
                 </div>
               </div>
@@ -787,6 +789,7 @@ export const OrganizerDashboardPage = () => {
                       <th className="p-2.5 border-r border-ink/20">Name</th>
                       <th className="p-2.5 border-r border-ink/20">School ID</th>
                       <th className="p-2.5 border-r border-ink/20">Email</th>
+                      <th className="p-2.5 border-r border-ink/20">Fee</th>
                       <th className="p-2.5 border-r border-ink/20">Status</th>
                       <th className="p-2.5">Registered</th>
                     </tr>
@@ -800,6 +803,9 @@ export const OrganizerDashboardPage = () => {
                         <td className="p-2.5 font-body border-r border-ink/10">{a.full_name}</td>
                         <td className="p-2.5 border-r border-ink/10">{a.school_id}</td>
                         <td className="p-2.5 text-ink-muted border-r border-ink/10">{a.email}</td>
+                        <td className="p-2.5 font-bold border-r border-ink/10">
+                          {formatFee(attendeeModalEvent.fee_amount)}
+                        </td>
                         <td className="p-2.5 border-r border-ink/10">
                           <span
                             className={`px-1.5 py-0.5 text-xs font-bold uppercase border ${

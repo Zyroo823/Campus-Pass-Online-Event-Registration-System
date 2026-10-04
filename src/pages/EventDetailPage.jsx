@@ -1,8 +1,9 @@
 /**
  * Event Detail Page
  * Plain JavaScript
- * FR-006: Display event details: schedule, venue, organizer, seats remaining
+ * FR-006: Display event details: schedule, venue, organizer, seats remaining, fee
  * FR-007: Register for event, rejecting duplicates, full events, past deadline
+ * FR-008: Cancel active registration before event starts
  * NFR-003: Usability: under 3 clicks from home; clear error messages
  */
 
@@ -14,6 +15,8 @@ import { useToast } from '../context/ToastContext.jsx';
 import { SeatStrip } from '../components/common/SeatStrip.jsx';
 import { RateLimitCountdown } from '../components/common/RateLimitCountdown.jsx';
 import { RegistrationSuccessModal } from '../components/common/RegistrationSuccessModal.jsx';
+import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
+import { formatFee } from '../utils/formatters.js';
 import {
   Calendar,
   Clock,
@@ -30,9 +33,11 @@ export const EventDetailPage = () => {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [rateLimitSeconds, setRateLimitSeconds] = useState(null);
-  const [isAlreadyRegistered, setIsAlreadyRegistered] = useState(false);
+  const [activeUserRegistration, setActiveUserRegistration] = useState(null);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [registrationModalData, setRegistrationModalData] = useState(null);
 
   const { user } = useAuth();
@@ -52,7 +57,7 @@ export const EventDetailPage = () => {
           const matched = (ticketsRes.tickets || []).find(
             t => t.event_id === res.event.id && (t.registration_status === 'approved' || t.registration_status === 'pending')
           );
-          setIsAlreadyRegistered(Boolean(matched));
+          setActiveUserRegistration(matched || null);
         } catch {
           // Ignore
         }
@@ -88,7 +93,21 @@ export const EventDetailPage = () => {
         starts_at: event.starts_at,
         venue: event.venue,
       });
-      setIsAlreadyRegistered(true);
+      setActiveUserRegistration({
+        registration_id: res.registration.registration_id,
+        event_id: event.id,
+        registration_status: res.registration.status,
+      });
+
+      // Update seat counts locally immediately
+      if (res.registration.status === 'approved') {
+        setEvent(prev => ({
+          ...prev,
+          approved_count: prev.approved_count + 1,
+          seats_remaining: Math.max(0, prev.seats_remaining - 1),
+        }));
+      }
+
       showToast(res.message, 'success');
       fetchEvent();
     } catch (err) {
@@ -102,6 +121,35 @@ export const EventDetailPage = () => {
       }
     } finally {
       setRegistering(false);
+    }
+  };
+
+  const handleCancelPass = async () => {
+    if (!activeUserRegistration) return;
+    setCancelling(true);
+
+    try {
+      const res = await api.patch(`/api/registrations/${activeUserRegistration.registration_id}/cancel`);
+      showToast(res.message || 'Your pass was cancelled.', 'success');
+      setIsCancelDialogOpen(false);
+
+      // Free seat immediately without page reload
+      const wasApproved = activeUserRegistration.registration_status === 'approved';
+      setActiveUserRegistration(null);
+
+      if (wasApproved) {
+        setEvent(prev => ({
+          ...prev,
+          approved_count: Math.max(0, prev.approved_count - 1),
+          seats_remaining: Math.min(prev.capacity, prev.seats_remaining + 1),
+        }));
+      }
+
+      fetchEvent();
+    } catch (err) {
+      showToast(err.message || 'Failed to cancel pass.', 'error');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -147,7 +195,9 @@ export const EventDetailPage = () => {
   const isPastDeadline = event.is_past_deadline || deadlineDate.getTime() <= Date.now();
   const hasStarted = event.has_started || startDate.getTime() <= Date.now();
 
+  const isAlreadyRegistered = Boolean(activeUserRegistration);
   const canRegister = !isFull && !isCancelled && !isPastDeadline && !hasStarted && !isAlreadyRegistered;
+  const canCancel = isAlreadyRegistered && !hasStarted;
 
   return (
     <main role="main" className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
@@ -290,6 +340,19 @@ export const EventDetailPage = () => {
                 showExactRatio={true}
               />
 
+              {/* Entrance Fee Info (FR-006, FR-009, FR-010) */}
+              <div className="p-3 border-2 border-ink bg-paper space-y-1.5">
+                <div className="flex items-center justify-between font-mono text-xs">
+                  <span className="text-ink-muted uppercase font-bold">Entrance Fee:</span>
+                  <span data-testid="event-fee-label" className="font-bold text-sm text-ink">
+                    {formatFee(event.fee_amount)}
+                  </span>
+                </div>
+                <p className="text-[11px] font-mono text-ink-muted leading-tight border-t border-ink/20 pt-1.5">
+                  Pay at the entrance. This site does not take payments.
+                </p>
+              </div>
+
               {/* Status Notices */}
               {isCancelled && (
                 <div
@@ -330,7 +393,7 @@ export const EventDetailPage = () => {
                   className="p-3 border-2 border-olive bg-olive-faint text-ink font-mono text-xs flex items-center gap-2"
                 >
                   <CheckCircle2 className="w-4 h-4 text-olive shrink-0" />
-                  <span>You are currently registered for this event.</span>
+                  <span>You are currently registered for this event ({activeUserRegistration.registration_status}).</span>
                 </div>
               )}
 
@@ -370,19 +433,45 @@ export const EventDetailPage = () => {
                 </button>
               )}
 
+              {/* Cancel Pass Button when user holds an active pass */}
+              {canCancel && (
+                <button
+                  type="button"
+                  data-testid="cancel-pass-button"
+                  onClick={() => setIsCancelDialogOpen(true)}
+                  className="w-full py-2.5 px-4 text-xs font-mono font-bold text-center border-2 border-vermilion bg-paper text-vermilion hover:bg-vermilion hover:text-paper transition-colors shadow-hard-sm cursor-pointer"
+                >
+                  Cancel pass
+                </button>
+              )}
+
               {isAlreadyRegistered && (
                 <Link
                   to="/dashboard"
                   data-testid="view-my-tickets-link"
                   className="w-full py-2.5 px-4 text-xs font-mono font-bold text-center border-2 border-ink bg-paper text-ink hover:bg-paper-dark transition-colors shadow-hard-sm"
                 >
-                  View My Pass
+                  View My Tickets
                 </Link>
               )}
             </aside>
           </div>
         </div>
       </article>
+
+      {/* Cancel Pass Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={isCancelDialogOpen}
+        title={`Cancel your pass for ${event.title}?`}
+        itemName={event.title}
+        actionType="cancel"
+        dialogTestId="cancel-pass-dialog"
+        confirmTestId="cancel-pass-confirm"
+        confirmLabel={cancelling ? 'Cancelling...' : 'Confirm Cancellation'}
+        message="Are you sure you want to cancel your pass for this event? Your seat will be freed immediately and returned to the open pool."
+        onConfirm={handleCancelPass}
+        onClose={() => setIsCancelDialogOpen(false)}
+      />
 
       {/* Registration Success Modal (FR-007) */}
       <RegistrationSuccessModal

@@ -80,6 +80,7 @@ app.get('/api/health', (_req, res) => {
 
 // Mount application API routes
 app.use('/api/auth', authRoutes);
+app.use('/api/registrations', registrationRoutes);
 app.use('/api/events', registrationRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/users', userRoutes);

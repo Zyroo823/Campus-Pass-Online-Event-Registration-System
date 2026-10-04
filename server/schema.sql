@@ -50,6 +50,7 @@ CREATE TABLE events (
   ends_at DATETIME NOT NULL,
   registration_deadline DATETIME NOT NULL,
   capacity INT NOT NULL,
+  fee_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   requires_approval TINYINT(1) NOT NULL DEFAULT 0,
   status ENUM('published', 'cancelled') NOT NULL DEFAULT 'published',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

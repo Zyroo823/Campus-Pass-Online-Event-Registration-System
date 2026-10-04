@@ -52,6 +52,7 @@ router.get('/my-tickets', authenticate, async (req, res, next) => {
         e.ends_at,
         e.registration_deadline,
         e.capacity,
+        e.fee_amount,
         e.requires_approval,
         e.status AS event_status,
         u.full_name AS organizer_name
@@ -65,6 +66,7 @@ router.get('/my-tickets', authenticate, async (req, res, next) => {
 
     const tickets = rows.map((r) => ({
       ...r,
+      fee_amount: Number(r.fee_amount) || 0,
       reference_code: `EVT-${String(r.event_id).padStart(4, '0')}-${String(r.registration_id).padStart(4, '0')}`,
       has_started: new Date(r.starts_at).getTime() <= Date.now(),
     }));
@@ -190,42 +192,124 @@ router.post('/:id/register', authenticate, eventRegisterLimiter, async (req, res
   }
 });
 
-// POST /api/events/:id/cancel (FR-008)
-router.post('/:id/cancel', authenticate, async (req, res, next) => {
+// PATCH /api/registrations/:id/cancel or PATCH /api/events/:id/cancel (FR-008)
+router.patch('/:id/cancel', authenticate, eventRegisterLimiter, async (req, res, next) => {
   try {
-    const eventId = Number(req.params.id);
+    const id = Number(req.params.id);
     const userId = req.user.id;
 
-    const [regs] = await pool.query(
-      'SELECT r.*, e.starts_at, e.title FROM registrations r JOIN events e ON r.event_id = e.id WHERE r.event_id = ? AND r.user_id = ?',
-      [eventId, userId]
+    // Search by registration id first, or fallback to event id
+    let [regs] = await pool.query(
+      `SELECT r.*, e.starts_at, e.title 
+       FROM registrations r 
+       JOIN events e ON r.event_id = e.id 
+       WHERE r.id = ?`,
+      [id]
     );
 
     if (!regs || regs.length === 0) {
-      throw new AppError(404, 'REGISTRATION_NOT_FOUND', 'No active registration found for this event.');
+      // Fallback: check if id was event_id
+      const [byEvent] = await pool.query(
+        `SELECT r.*, e.starts_at, e.title 
+         FROM registrations r 
+         JOIN events e ON r.event_id = e.id 
+         WHERE r.event_id = ? AND r.user_id = ?`,
+        [id, userId]
+      );
+      regs = byEvent;
+    }
+
+    if (!regs || regs.length === 0) {
+      throw new AppError(404, 'REGISTRATION_NOT_FOUND', 'Registration not found.');
     }
 
     const reg = regs[0];
+
+    if (reg.user_id !== userId && req.user.role !== 'admin') {
+      throw new AppError(403, 'FORBIDDEN', 'You do not have permission to cancel this pass.');
+    }
+
     if (reg.status === 'cancelled') {
-      throw new AppError(400, 'ALREADY_CANCELLED', 'This registration has already been cancelled.');
+      throw new AppError(409, 'ALREADY_CANCELLED', 'This pass is already cancelled.');
     }
 
     const nowStr = getNowInAppTimezone();
     if (reg.starts_at <= nowStr) {
       throw new AppError(
-        400,
-        'CANNOT_CANCEL_PAST_START',
-        'Registrations cannot be cancelled after the event has already started.'
+        409,
+        'EVENT_STARTED',
+        "This event has already started, so the pass can't be cancelled."
       );
     }
 
     await pool.execute(
-      "UPDATE registrations SET status = 'cancelled', decided_at = NOW() WHERE event_id = ? AND user_id = ?",
-      [eventId, userId]
+      "UPDATE registrations SET status = 'cancelled', decided_at = NOW() WHERE id = ?",
+      [reg.id]
     );
 
     res.status(200).json({
-      message: `Your registration for "${reg.title}" has been cancelled.`,
+      message: 'Your pass was cancelled.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/events/:id/cancel (FR-008 alias)
+router.post('/:id/cancel', authenticate, eventRegisterLimiter, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const userId = req.user.id;
+
+    let [regs] = await pool.query(
+      `SELECT r.*, e.starts_at, e.title 
+       FROM registrations r 
+       JOIN events e ON r.event_id = e.id 
+       WHERE r.id = ?`,
+      [id]
+    );
+
+    if (!regs || regs.length === 0) {
+      const [byEvent] = await pool.query(
+        `SELECT r.*, e.starts_at, e.title 
+         FROM registrations r 
+         JOIN events e ON r.event_id = e.id 
+         WHERE r.event_id = ? AND r.user_id = ?`,
+        [id, userId]
+      );
+      regs = byEvent;
+    }
+
+    if (!regs || regs.length === 0) {
+      throw new AppError(404, 'REGISTRATION_NOT_FOUND', 'Registration not found.');
+    }
+
+    const reg = regs[0];
+
+    if (reg.user_id !== userId && req.user.role !== 'admin') {
+      throw new AppError(403, 'FORBIDDEN', 'You do not have permission to cancel this pass.');
+    }
+
+    if (reg.status === 'cancelled') {
+      throw new AppError(409, 'ALREADY_CANCELLED', 'This pass is already cancelled.');
+    }
+
+    const nowStr = getNowInAppTimezone();
+    if (reg.starts_at <= nowStr) {
+      throw new AppError(
+        409,
+        'EVENT_STARTED',
+        "This event has already started, so the pass can't be cancelled."
+      );
+    }
+
+    await pool.execute(
+      "UPDATE registrations SET status = 'cancelled', decided_at = NOW() WHERE id = ?",
+      [reg.id]
+    );
+
+    res.status(200).json({
+      message: 'Your pass was cancelled.',
     });
   } catch (err) {
     next(err);

@@ -39,19 +39,22 @@ export const NotificationsPage = () => {
         prev.map(n => (n.id === id ? { ...n, is_read: 1 } : n))
       );
       await refreshUnreadCount();
-    } catch {
-      showToast('Could not update notification status.', 'error');
+    } catch (err) {
+      showToast(err.message || 'Could not update notification status.', 'error');
     }
   };
 
   const handleMarkAllAsRead = async () => {
+    const unread = notifications.filter(n => !n.is_read).length;
+    if (unread === 0) return;
+
     try {
       await api.patch('/api/notifications/read-all');
       setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
       await refreshUnreadCount();
       showToast('All notifications marked as read.', 'success');
-    } catch {
-      showToast('Could not mark notifications as read.', 'error');
+    } catch (err) {
+      showToast(err.message || 'Could not mark notifications as read.', 'error');
     }
   };
 
@@ -70,17 +73,21 @@ export const NotificationsPage = () => {
           </h1>
         </div>
 
-        {unreadCount > 0 && (
-          <button
-            type="button"
-            data-testid="mark-all-read-btn"
-            onClick={handleMarkAllAsRead}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 border-2 border-ink bg-paper text-ink font-mono text-xs font-bold shadow-hard-sm hover:bg-paper-dark cursor-pointer shrink-0"
-          >
-            <CheckCheck className="w-4 h-4" />
-            <span>Mark All as Read</span>
-          </button>
-        )}
+        <button
+          type="button"
+          data-testid="mark-all-read-button"
+          disabled={unreadCount === 0}
+          aria-disabled={unreadCount === 0 ? "true" : "false"}
+          onClick={handleMarkAllAsRead}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 border-2 border-ink font-mono text-xs font-bold shadow-hard-sm shrink-0 transition-colors ${
+            unreadCount === 0
+              ? 'bg-paper-dark text-ink-muted border-ink/40 opacity-60 cursor-not-allowed'
+              : 'bg-paper text-ink hover:bg-paper-dark cursor-pointer'
+          }`}
+        >
+          <CheckCheck className="w-4 h-4" />
+          <span>Mark All as Read</span>
+        </button>
       </section>
 
       {/* Notifications List */}

@@ -93,6 +93,21 @@ router.patch('/:id', async (req, res, next) => {
     const setClauses = [];
     const params = [];
 
+    if (updates.full_name !== undefined) {
+      setClauses.push('full_name = ?');
+      params.push(updates.full_name);
+    }
+
+    if (updates.email !== undefined) {
+      setClauses.push('email = ?');
+      params.push(updates.email);
+    }
+
+    if (updates.school_id !== undefined) {
+      setClauses.push('school_id = ?');
+      params.push(updates.school_id);
+    }
+
     if (updates.role !== undefined) {
       setClauses.push('role = ?');
       params.push(updates.role);

@@ -14,6 +14,9 @@ export const ConfirmDialog = ({
   actionType,
   message,
   confirmLabel,
+  dialogTestId,
+  confirmTestId,
+  cancelTestId,
   onConfirm,
   onClose,
 }) => {
@@ -23,12 +26,37 @@ export const ConfirmDialog = ({
   useEffect(() => {
     if (isOpen) {
       triggerRef.current = document.activeElement;
-      const confirmBtn = dialogRef.current?.querySelector('[data-testid="dialog-confirm"]');
+      const confirmBtn = dialogRef.current?.querySelector(
+        '[data-testid="cancel-pass-confirm"], [data-testid="dialog-confirm"]'
+      );
       confirmBtn?.focus();
 
       const handleKeyDown = (e) => {
         if (e.key === 'Escape') {
           onClose();
+          return;
+        }
+
+        if (e.key === 'Tab') {
+          const focusableElements = dialogRef.current?.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          );
+          if (!focusableElements || focusableElements.length === 0) return;
+
+          const firstElement = focusableElements[0];
+          const lastElement = focusableElements[focusableElements.length - 1];
+
+          if (e.shiftKey) {
+            if (document.activeElement === firstElement) {
+              e.preventDefault();
+              lastElement.focus();
+            }
+          } else {
+            if (document.activeElement === lastElement) {
+              e.preventDefault();
+              firstElement.focus();
+            }
+          }
         }
       };
 
@@ -47,6 +75,7 @@ export const ConfirmDialog = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
+      data-testid={dialogTestId}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/50 backdrop-grayscale-0"
     >
       <div
@@ -72,15 +101,17 @@ export const ConfirmDialog = ({
 
         <div className="text-sm font-body text-ink space-y-2">
           <p>{message}</p>
-          <div className="p-2.5 bg-paper-dark border border-ink font-mono text-xs font-semibold break-words">
-            Target: &ldquo;{itemName}&rdquo;
-          </div>
+          {itemName && (
+            <div className="p-2.5 bg-paper-dark border border-ink font-mono text-xs font-semibold break-words">
+              Target: &ldquo;{itemName}&rdquo;
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-3 border-t-2 border-ink">
           <button
             type="button"
-            data-testid="dialog-cancel"
+            data-testid={cancelTestId || "dialog-cancel"}
             onClick={onClose}
             className="px-4 py-2 text-xs font-mono font-bold border-2 border-ink bg-paper text-ink hover:bg-paper-dark transition-colors cursor-pointer shadow-hard-sm"
           >
@@ -88,7 +119,7 @@ export const ConfirmDialog = ({
           </button>
           <button
             type="button"
-            data-testid="dialog-confirm"
+            data-testid={confirmTestId || "dialog-confirm"}
             onClick={onConfirm}
             className={`px-4 py-2 text-xs font-mono font-bold border-2 border-ink text-paper cursor-pointer shadow-hard-sm transition-colors ${
               actionType === 'delete' || actionType === 'cancel'

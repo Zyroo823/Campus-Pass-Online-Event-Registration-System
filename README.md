@@ -17,8 +17,8 @@ CampusPass is a full-stack web application designed for school event registratio
 │   ├── seed-data.js          # Realistic seed records for STLC testing
 │   └── routes/
 │       ├── auth.js           # /api/auth (register, login, logout, me)
-│       ├── events.js         # /api/events (list, filter, create, edit, delete)
-│       ├── registrations.js  # /api/events (register, cancel, decisions, tickets)
+│       ├── events.js         # /api/events (list, filter, create, edit, delete, attendees, csv)
+│       ├── registrations.js  # /api/events & /api/registrations (register, cancel, decisions, tickets)
 │       ├── notifications.js  # /api/notifications (feed, read, read-all)
 │       └── users.js          # /api/users (admin list, role update, toggle active)
 ├── src/
@@ -29,15 +29,17 @@ CampusPass is a full-stack web application designed for school event registratio
 │   ├── context/
 │   │   ├── AuthContext.jsx   # Single source of truth auth context
 │   │   └── ToastContext.jsx  # Notification toast system
+│   ├── utils/
+│   │   └── formatters.js     # Currency and date/time formatting helpers
 │   ├── pages/
 │   │   ├── HomePage.jsx                 # Public event directory & filters
-│   │   ├── EventDetailPage.jsx          # Event details & pass claiming
-│   │   ├── LoginPage.jsx                # User authentication with rate countdown
+│   │   ├── EventDetailPage.jsx          # Event details, entrance fee & pass claiming/cancellation
+│   │   ├── LoginPage.jsx                # User authentication with demo quick-fill
 │   │   ├── RegisterPage.jsx             # Participant registration
-│   │   ├── ParticipantDashboardPage.jsx # Ticket management
-│   │   ├── OrganizerDashboardPage.jsx   # Event management & decision queue
+│   │   ├── ParticipantDashboardPage.jsx # Ticket management with cancel pass actions
+│   │   ├── OrganizerDashboardPage.jsx   # Event management, fee config & decision queue
 │   │   ├── AdminDashboardPage.jsx       # User administration
-│   │   ├── NotificationsPage.jsx        # Notification center
+│   │   ├── NotificationsPage.jsx        # Notification center with mark-all-as-read
 │   │   ├── SystemDownPage.jsx           # Outage diagnostic screen
 │   │   └── NotFoundPage.jsx             # 404 page
 │   └── components/
@@ -88,6 +90,12 @@ CampusPass is a full-stack web application designed for school event registratio
    DB_PASSWORD=""
    DB_NAME="campus_events"
 
+   # Currency Configuration (Informational only: default PHP)
+   CURRENCY_CODE="PHP"
+
+   # Seed Data Minimum Date for upcoming events (YYYY-MM-DD; default: 2026-10-19)
+   SEED_MIN_DATE="2026-10-19"
+
    # Rate limits (tunable for fast STLC limit verification)
    RATE_LIMIT_GLOBAL_MAX=120
    RATE_LIMIT_LOGIN_MAX=5
@@ -112,8 +120,9 @@ npm run db:reset
 This runs `server/reset.js`, which:
 1. Executes `server/schema.sql` against MySQL/MariaDB (or in-memory fallback).
 2. Generates bcrypt hashes (cost 12) for all users with the shared password `Test@1234`.
-3. Seeds 20 realistic campus events covering all testing edge cases.
+3. Seeds 20 realistic campus events covering all testing edge cases (with dynamic dates starting after `SEED_MIN_DATE`).
 4. Seeds registrations across all 4 statuses (`pending`, `approved`, `rejected`, `cancelled`).
+5. Seeds entrance fees for test events (e.g. 50.00, 100.00, 150.00, 250.00, 500.00, and Free).
 
 ---
 
@@ -144,12 +153,11 @@ All accounts share the documented password: **`Test@1234`**
 | Username | Role | Full Legal Name | School ID | Email | Notes |
 |---|---|---|---|---|---|
 | `admin01` | Admin | Engr. Danilo B. Cabahug (Dean) | `ADM-2024-001` | `admin01@uc.edu.ph` | Can promote roles and deactivate users |
-| `organizer01` | Organizer | Prof. Maria Theresa Gomez (CCS) | `FAC-2024-101` | `organizer01@uc.edu.ph` | Owns events 1, 2, 4, 6, 9, 12, 15, 17, 18 |
-| `organizer02` | Organizer | Joshua Neil Alcantara (SSC Pres) | `STU-2024-201` | `organizer02@uc.edu.ph` | Owns events 3, 5, 7, 8, 10, 11, 13, 14, 16, 19, 20 |
+| `organizer01` | Organizer | Prof. Maria Theresa Gomez (CCS) | `FAC-2024-101` | `organizer01@uc.edu.ph` | Primary faculty event host and organizer |
 | `student01` | Participant | Amara D. Mendoza | `26-10201-M` | `student01@uc.edu.ph` | Has active passes and pending applications |
 | `student02` | Participant | Liam Kyle Fernandez | `26-10202-M` | `student02@uc.edu.ph` | Has pending application for Event 3 |
-| `student03` to `student11` | Participant | Various Students | `26-10203-M`+ | `studentNN@uc.edu.ph` | Available for multi-user test cases |
-| `student12` | Participant | David Christian Dabon | `26-10212-M` | `student12@uc.edu.ph` | **Deactivated** (to test login block & admin reactivate) |
+| `student03` | Participant | Sofia Isabelle Tan | `26-10203-M` | `student03@uc.edu.ph` | Has cancelled pass and approved passes |
+| `student04` | Participant | Kenji Paolo Yap | `26-10204-M` | `student04@uc.edu.ph` | Has declined registration application |
 
 ---
 
