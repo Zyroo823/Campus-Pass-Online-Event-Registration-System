@@ -11,7 +11,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { ClientApiError } from '../api.js';
-import { Lock, User, AlertCircle, AlertTriangle, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { Lock, User, AlertCircle, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 
 export const LoginPage = () => {
   const [username, setUsername] = useState('');
@@ -288,61 +288,6 @@ export const LoginPage = () => {
           >
             Create account
           </Link>
-        </div>
-
-        {/* Demo Accounts Quick-Fill Panel */}
-        <div className="mt-5 p-3.5 bg-paper-dark border-2 border-ink shadow-hard-sm font-mono text-xs text-[#2C2820] space-y-2">
-          <div className="flex items-center gap-1.5 font-bold text-ink text-xs uppercase tracking-wider">
-            <KeyRound className="w-3.5 h-3.5 text-vermilion" />
-            <span>Default Test Credentials (Password: Test@1234)</span>
-          </div>
-          <p className="text-[11px] text-ink-muted leading-tight">
-            Click any demo role below to automatically fill credentials:
-          </p>
-          <div className="grid grid-cols-3 gap-1.5 pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                setUsername('admin01');
-                setPassword('Test@1234');
-                setErrorMessage(null);
-                setIsApiError(false);
-                setFieldErrors({});
-              }}
-              data-testid="quick-fill-admin"
-              className="px-2 py-1.5 border border-ink bg-paper text-ink hover:bg-ink hover:text-paper transition-colors font-bold text-center cursor-pointer truncate"
-            >
-              Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setUsername('organizer01');
-                setPassword('Test@1234');
-                setErrorMessage(null);
-                setIsApiError(false);
-                setFieldErrors({});
-              }}
-              data-testid="quick-fill-organizer"
-              className="px-2 py-1.5 border border-ink bg-paper text-ink hover:bg-ink hover:text-paper transition-colors font-bold text-center cursor-pointer truncate"
-            >
-              Organizer
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setUsername('student01');
-                setPassword('Test@1234');
-                setErrorMessage(null);
-                setIsApiError(false);
-                setFieldErrors({});
-              }}
-              data-testid="quick-fill-student"
-              className="px-2 py-1.5 border border-ink bg-paper text-ink hover:bg-ink hover:text-paper transition-colors font-bold text-center cursor-pointer truncate"
-            >
-              Student
-            </button>
-          </div>
         </div>
       </div>
     </main>

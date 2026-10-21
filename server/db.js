@@ -106,7 +106,8 @@ async function queryEmulated(sql, params = []) {
   }
 
   // 3. Admin: list users with search/filter and pagination
-  if (cleanSql.includes('FROM users') && cleanSql.includes('ORDER BY id DESC')) {
+  if (cleanSql.includes('FROM users') && cleanSql.includes('ORDER BY')) {
+    const isDesc = cleanSql.includes('ORDER BY id DESC') || cleanSql.includes(' DESC');
     let list = [...inMemTables.users];
     let pIdx = 0;
     if (cleanSql.includes('role = ?')) {
@@ -126,6 +127,7 @@ async function queryEmulated(sql, params = []) {
         x.school_id.toLowerCase().includes(keyword)
       );
     }
+    list.sort((a, b) => (isDesc ? b.id - a.id : a.id - b.id));
     const total = list.length;
     const limit = Number(params[pIdx++]) || 12;
     const offset = Number(params[pIdx++]) || 0;
