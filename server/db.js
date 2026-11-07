@@ -5,6 +5,7 @@
  * NFR-008: Parameterized queries only
  */
 
+import { readFile } from 'node:fs/promises';
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import {
@@ -579,65 +580,137 @@ class EmulatedConnection {
   release() {}
 }
 
-export const pool = {
-  async query(sql, params = []) {
-    if (currentDbMode === 'connected' && realPool) {
-      try {
-        return await realPool.query(sql, params);
-      } catch (err) {
-        console.warn('[DB] Fallback to in-memory store due to query error:', err.message);
-        return queryEmulated(sql, params);
+async function seedHostedDb(connection) {
+  // Claim the initial seed in the same transaction as its records.
+  await connection.beginTransaction();
+  try {
+    const [claim] = await connection.execute(
+      'INSERT IGNORE INTO campuspass_seed_state (id) VALUES (1)'
+    );
+    if (claim.affectedRows === 1) {
+      const [existingUsers] = await connection.query('SELECT id FROM users LIMIT 1');
+      if (existingUsers.length === 0) {
+        const users = await generateSeedUsers();
+        for (const [index, user] of users.entries()) {
+          await connection.execute(
+            `INSERT INTO users (id, username, email, full_name, school_id, password_hash, role, is_active)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [index + 1, user.username, user.email, user.full_name, user.school_id,
+              user.password_hash, user.role, user.is_active]
+          );
+        }
+
+        for (const [index, event] of generateSeedEvents().entries()) {
+          await connection.execute(
+            `INSERT INTO events (id, organizer_id, title, description, category, venue, starts_at,
+              ends_at, registration_deadline, capacity, fee_amount, requires_approval, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [index + 1, event.organizer_id, event.title, event.description, event.category,
+              event.venue, event.starts_at, event.ends_at, event.registration_deadline,
+              event.capacity, event.fee_amount || 0, event.requires_approval, event.status]
+          );
+        }
+
+        for (const registration of generateSeedRegistrations()) {
+          await connection.execute(
+            `INSERT INTO registrations (event_id, user_id, status, registered_at, decided_at)
+             VALUES (?, ?, ?, ?, ?)`,
+            [registration.event_id, registration.user_id, registration.status,
+              registration.registered_at, registration.decided_at]
+          );
+        }
+
+        for (const notification of generateSeedNotifications()) {
+          await connection.execute(
+            `INSERT INTO notifications (user_id, type, message, event_id, is_read, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [notification.user_id, notification.type, notification.message,
+              notification.event_id, notification.is_read, notification.created_at]
+          );
+        }
       }
     }
-    return queryEmulated(sql, params);
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  }
+}
+
+async function initializeHostedDb(options) {
+  const connection = await mysql.createConnection(options);
+  try {
+    const database = mysql.escapeId(DB_NAME, true);
+    await connection.query(
+      `CREATE DATABASE IF NOT EXISTS ${database} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
+    );
+    await connection.query(`USE ${database}`);
+
+    // Reuse only the table definitions. The reset script's DROP statements never run here.
+    const schema = await readFile(new URL('./schema.sql', import.meta.url), 'utf8');
+    for (const [statement] of schema.matchAll(/^CREATE TABLE [\s\S]+?;/gm)) {
+      await connection.query(statement.replace('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS '));
+    }
+    await connection.query(
+      'CREATE TABLE IF NOT EXISTS campuspass_seed_state (id TINYINT PRIMARY KEY)'
+    );
+    await seedHostedDb(connection);
+  } finally {
+    await connection.end();
+  }
+}
+
+export const pool = {
+  async query(sql, params = []) {
+    return realPool ? realPool.query(sql, params) : queryEmulated(sql, params);
   },
 
   async execute(sql, params = []) {
-    if (currentDbMode === 'connected' && realPool) {
-      try {
-        return await realPool.execute(sql, params);
-      } catch (err) {
-        console.warn('[DB] Fallback to in-memory store due to execute error:', err.message);
-        return queryEmulated(sql, params);
-      }
-    }
-    return queryEmulated(sql, params);
+    return realPool ? realPool.execute(sql, params) : queryEmulated(sql, params);
   },
 
   async getConnection() {
-    if (currentDbMode === 'connected' && realPool) {
-      try {
-        return await realPool.getConnection();
-      } catch {
-        return new EmulatedConnection();
-      }
-    }
-    return new EmulatedConnection();
+    return realPool ? realPool.getConnection() : new EmulatedConnection();
   },
 };
 
 export async function initDb() {
-  try {
-    const tempPool = mysql.createPool({
+  const isTiDB = DB_HOST.toLowerCase().endsWith('.tidbcloud.com');
+  // Existing Render demo configuration uses sys until an app database is selected.
+  if (isTiDB && DB_NAME === 'sys') {
+    console.warn('[DB] Set DB_NAME to the CampusPass database to enable TiDB storage.');
+  } else {
+    const options = {
       host: DB_HOST,
       port: DB_PORT,
       user: DB_USER,
       password: DB_PASSWORD,
+      connectTimeout: isTiDB ? 10000 : 2000,
+      ...(isTiDB && {
+        ssl: { minVersion: 'TLSv1.2', rejectUnauthorized: true, verifyIdentity: true },
+      }),
+    };
+    if (isTiDB) {
+      await initializeHostedDb(options);
+    }
+
+    const candidate = mysql.createPool({
+      ...options,
       database: DB_NAME,
       waitForConnections: true,
       connectionLimit: 10,
-      connectTimeout: 2000,
     });
-
-    const [rows] = await tempPool.query('SELECT 1');
-    if (rows) {
-      realPool = tempPool;
+    try {
+      await candidate.query('SELECT 1');
+      realPool = candidate;
       currentDbMode = 'connected';
-      console.log(`[DB] Connected to MySQL on ${DB_HOST}:${DB_PORT}/${DB_NAME}`);
+      console.log(`[DB] Connected to ${isTiDB ? 'TiDB' : 'MySQL'} database ${DB_NAME}`);
       return;
+    } catch (error) {
+      await candidate.end();
+      if (isTiDB) throw error;
+      console.warn('[DB] Local MySQL unavailable, starting the in-memory demo.');
     }
-  } catch {
-    console.log('[DB] MySQL not reachable on localhost; initializing in-memory store.');
   }
 
   await resetInMemoryDb();
